@@ -10,10 +10,10 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { ChangedFile, Commit, Content, Selection, Snapshot, ViewMode, Worktree } from '../types'
+import type { ChangedFile, Commit, Content, Expandable, Selection, Snapshot, ViewMode, Worktree } from '../types'
 import { createRepo, type GitRun, type Repo } from './git'
 import { COMMIT_LINE, DIM_TONES, LARGE, MEDIUM, SMALL, TONE_COLOR, artRuns, type Art } from './welcome'
-import { AFTER_VALUE, BEFORE_VALUE, pickedIndex, windowAround } from './window'
+import { windowAround } from './window'
 
 const PANE = 'commit-walk'
 const TITLE = 'Commit walk'
@@ -21,6 +21,10 @@ const TITLE = 'Commit walk'
 const PANE_COLUMNS = 84
 /** Debounce for refreshes after edits and turns. */
 const REFRESH_DELAY_MS = 400
+/** Rows a list shows at once; more page with its edge rows. */
+const LIST_ROWS = 8
+/** The colour of git's status letter in the file list. */
+const STATUS_COLOR: Partial<Record<string, string>> = { A: '#2EA043', D: '#EF4444', R: '#3B82F6', C: '#3B82F6', M: '#E08A00' }
 const GIT_TIMEOUT_MS = 20_000
 /** Tools whose successful, non-read-only calls may have changed the repository. */
 const WRITING_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'Bash'] as const
@@ -39,6 +43,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
 
 const selection = atom({ plugin: 'commit-walk', key: 'selection' } as const, INITIAL_SELECTION)
 const snapshot = atom({ plugin: 'commit-walk', key: 'snapshot' } as const, EMPTY_SNAPSHOT)
+const expanded = atom({ plugin: 'commit-walk', key: 'expanded' } as const, null as Expandable | null)
 
 /** The session's working directory: where the repository is looked for. */
 let sessionCwd = ''
@@ -204,12 +209,6 @@ function commitLabel(commit: Commit): string {
   return `${commit.shortSha}  ${commit.subject}`
 }
 
-function fileLabel(file: ChangedFile): string {
-  const name = file.oldPath && file.oldPath !== file.path ? `${file.oldPath} → ${file.path}` : file.path
-  const stats = file.isBinary ? 'binary' : `+${file.added} −${file.deleted}`
-  return `${file.status}  ${name}  ${stats}`
-}
-
 // ── The hooks ────────────────────────────────────────────────────────────
 
 export const register: Register = on => {
@@ -268,10 +267,9 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const table = $.ui.resolve(e)
     const { Box, Text, Button, Code } = table
-    // Mobile has no Select (its table still names one, drawn as nothing): it gets the value and the step buttons.
-    const Select = e.surface !== 'mobile' && 'Select' in table ? table.Select : null
     const sel = await read($, selection)
     const snap = await read($, snapshot)
+    const open = await read($, expanded)
     const width = Math.max(24, e.props.bodyColumns)
 
     // The sunflower over a commit line, centred: the largest that fits the pane
@@ -344,48 +342,6 @@ export const register: Register = on => {
     const file = snap.files[fileAt]
     const content = snap.content
 
-    /**
-     * A picker over a list of any length: at most 64 options (Claude Code's
-     * limit for a Select), as a window around the selected entry with an entry
-     * at each end that steps past the edge.
-     */
-    const pick = <T,>(spec: {
-      key: string
-      label: string
-      items: readonly T[]
-      at: number
-      valueOf: (item: T) => string
-      labelOf: (item: T) => string
-      edges: { before: (n: number) => string; after: (n: number) => string }
-      onPick: (item: T) => void
-    }) => {
-      if (spec.items.length === 0) return <Text dimColor>{spec.label}none</Text>
-      const current = spec.items[spec.at]
-      if (!Select) {
-        // Surfaces without a Select (mobile) get the current value and the step buttons.
-        return <Text>{spec.label}{current ? spec.labelOf(current) : ''}</Text>
-      }
-      const win = windowAround(spec.items, spec.at)
-      const room = width - spec.label.length - 4
-      const options = [
-        ...(win.before > 0 ? [{ value: BEFORE_VALUE, label: clip(spec.edges.before(win.before), room) }] : []),
-        ...win.items.map(item => ({ value: spec.valueOf(item), label: clip(spec.labelOf(item), room) })),
-        ...(win.after > 0 ? [{ value: AFTER_VALUE, label: clip(spec.edges.after(win.after), room) }] : []),
-      ]
-      return (
-        <Select
-          key={spec.key}
-          label={spec.label}
-          value={current ? spec.valueOf(current) : undefined}
-          options={options}
-          onSelect={(picked: string) => {
-            const target = spec.items[pickedIndex(win, picked, spec.valueOf)]
-            if (target !== undefined) spec.onPick(target)
-          }}
-        />
-      )
-    }
-
     const mode = (key: ViewMode, label: string, hotkey: string) => (
       <Button
         key={`mode-${key}`}
@@ -396,6 +352,79 @@ export const register: Register = on => {
         {label}
       </Button>
     )
+
+    // Lists are whole-row buttons: the full width of a row is the click target.
+    // Inside a rounded frame, so a row is the frame's inner width.
+    const inner = Math.max(10, width - 2)
+    const pad = (text: string, room = inner) => text.padEnd(room).slice(0, room)
+
+    /**
+     * Rows of a list around the selected entry, LIST_ROWS at a time, with an
+     * edge row at either end that pages. Each row: a ▶ on the selected one, an
+     * optional coloured tag, the entry's text.
+     */
+    const rowList = <T,>(spec: {
+      prefix: string
+      items: readonly T[]
+      at: number
+      keyOf: (item: T) => string
+      tagOf?: (item: T) => { text: string; color: string | undefined }
+      textOf: (item: T) => string
+      noun: { one: string; many: string; before: string; after: string }
+      onPick: (item: T) => void
+    }) => {
+      const win = windowAround(spec.items, spec.at, LIST_ROWS + 2)
+      const edge = (side: 'before' | 'after', count: number, target: number) => (
+        <Button key={`${spec.prefix}-${side}`} plain dimColor onPress={() => {
+          const item = spec.items[target]
+          if (item !== undefined) spec.onPick(item)
+        }}>
+          {pad(`  ${side === 'before' ? '↑' : '↓'} ${count} ${spec.noun[side]} ${count === 1 ? spec.noun.one : spec.noun.many}`)}
+        </Button>
+      )
+      return [
+        win.before > 0 ? edge('before', win.before, win.start - 1) : null,
+        ...win.items.map((item, i) => {
+          const isSelected = win.start + i === spec.at
+          const tag = spec.tagOf?.(item)
+          const used = 2 + (tag ? tag.text.length + 2 : 0)
+          return (
+            <Button key={`${spec.prefix}:${spec.keyOf(item)}`} label={spec.keyOf(item)} plain onPress={() => spec.onPick(item)}>
+              <Text color={isSelected ? TONE_COLOR.petal : undefined} bold={isSelected}>{isSelected ? '▶ ' : '  '}</Text>
+              {tag ? <Text color={tag.color}>{tag.text}  </Text> : null}
+              <Text bold={isSelected}>{pad(clip(spec.textOf(item), inner - used - 1), inner - used)}</Text>
+            </Button>
+          )
+        }),
+        win.after > 0 ? edge('after', win.after, win.start + win.items.length) : null,
+      ]
+    }
+
+    /**
+     * A list folded into one framed row showing the current entry: a press on
+     * the row opens it below, another press or a pick folds it again.
+     */
+    const foldable = <T,>(spec: Parameters<typeof rowList<T>>[0] & { which: Expandable; label: string; current: string }) => {
+      const isOpen = open === spec.which
+      const head = pad(`${spec.label}${clip(spec.current, inner - spec.label.length - 3)}`, inner - 2)
+      return (
+        <Box flexDirection="column" borderStyle="round" borderDimColor>
+          <Button key={`${spec.which}-toggle`} plain onPress={() => void update($, expanded, now => (now === spec.which ? null : spec.which))}>
+            <Text>{head}</Text>
+            <Text dimColor>{isOpen ? ' ▴' : ' ▾'}</Text>
+          </Button>
+          {isOpen
+            ? rowList({
+                ...spec,
+                onPick: item => {
+                  void update($, expanded, () => null)
+                  spec.onPick(item)
+                },
+              })
+            : null}
+        </Box>
+      )
+    }
 
     const header = (
       <Box flexDirection="column">
@@ -410,14 +439,17 @@ export const register: Register = on => {
       </Box>
     )
 
-    const worktreePicker = pick({
-      key: 'worktree',
+    const worktreeAt = snap.worktrees.findIndex(wt => wt.path === worktree?.path)
+    const worktreePicker = foldable({
+      which: 'worktree',
+      prefix: 'worktree',
       label: 'Worktree  ',
+      current: worktree ? worktreeLabel(worktree) : 'none',
       items: snap.worktrees,
-      at: snap.worktrees.findIndex(wt => wt.path === worktree?.path),
-      valueOf: wt => wt.path,
-      labelOf: worktreeLabel,
-      edges: { before: n => `↑ ${n} more worktrees…`, after: n => `↓ ${n} more worktrees…` },
+      at: worktreeAt,
+      keyOf: wt => wt.path,
+      textOf: worktreeLabel,
+      noun: { one: 'worktree', many: 'worktrees', before: 'more', after: 'more' },
       onPick: wt => void load($, 'repo', { worktree: wt.path, commit: null, file: null }),
     })
 
@@ -441,14 +473,16 @@ export const register: Register = on => {
         {worktreePicker}
 
         <Box flexDirection="column">
-          {pick({
-            key: 'commit',
+          {foldable({
+            which: 'commit',
+            prefix: 'commit',
             label: 'Commit    ',
+            current: commit ? commitLabel(commit) : 'none',
             items: snap.commits,
             at: commitAt,
-            valueOf: one => one.sha,
-            labelOf: commitLabel,
-            edges: { before: n => `↑ ${n} newer commits…`, after: n => `↓ ${n} older commits…` },
+            keyOf: one => one.sha,
+            textOf: commitLabel,
+            noun: { one: 'commit', many: 'commits', before: 'newer', after: 'older' },
             onPick: one => void load($, 'commit', { commit: one.sha, file: null }),
           })}
           {commit ? (
@@ -466,20 +500,26 @@ export const register: Register = on => {
         </Box>
 
         <Box flexDirection="column">
-          {pick({
-            key: 'file',
-            label: 'File      ',
-            items: snap.files,
-            at: fileAt,
-            valueOf: one => one.path,
-            labelOf: fileLabel,
-            edges: { before: n => `↑ ${n} earlier files…`, after: n => `↓ ${n} more files…` },
-            onPick: one => void load($, 'content', { file: one.path }),
-          })}
           <Box flexDirection="row" gap={1}>
-            <Button key="prev-file" hotkey="k" dimColor={fileAt <= 0} onPress={() => void stepFile($, -1)}>Prev file</Button>
-            <Button key="next-file" hotkey="j" dimColor={fileAt < 0 || fileAt >= snap.files.length - 1} onPress={() => void stepFile($, 1)}>Next file</Button>
-            <Text dimColor>{snap.files.length > 0 ? `${fileAt + 1} of ${snap.files.length}` : ''}</Text>
+            <Text>Files     </Text>
+            <Button key="prev-file" hotkey="k" dimColor={fileAt <= 0} onPress={() => void stepFile($, -1)}>Prev</Button>
+            <Button key="next-file" hotkey="j" dimColor={fileAt < 0 || fileAt >= snap.files.length - 1} onPress={() => void stepFile($, 1)}>Next</Button>
+            <Text dimColor>{snap.files.length > 0 ? `${fileAt + 1} of ${snap.files.length}` : 'none'}</Text>
+          </Box>
+          <Box flexDirection="column" borderStyle="round" borderDimColor>
+            {rowList({
+              prefix: 'file',
+              items: snap.files,
+              at: fileAt,
+              keyOf: one => one.path,
+              tagOf: one => ({ text: one.status, color: STATUS_COLOR[one.status] }),
+              textOf: one => {
+                const name = one.oldPath && one.oldPath !== one.path ? `${one.oldPath} → ${one.path}` : one.path
+                return `${name}  ${one.isBinary ? 'binary' : `+${one.added} −${one.deleted}`}`
+              },
+              noun: { one: 'file', many: 'files', before: 'earlier', after: 'more' },
+              onPick: one => void load($, 'content', { file: one.path }),
+            })}
           </Box>
         </Box>
 

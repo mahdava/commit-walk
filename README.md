@@ -55,9 +55,8 @@ tool, writes nothing to the repository and makes no network requests.
 | Claude Code | 2.1.300 or later, for the mods API. Tested on 2.1.300 to 2.1.302. |
 | Git | 2.36 or later, for NUL-separated `git worktree list` output |
 
-The pickers need the terminal, the desktop app or VS Code. The mobile app
-has no picker element. There the pane shows the current values and moves
-with the step buttons only.
+It draws the same on the terminal, the desktop app, VS Code and the mobile
+app: every control is a button.
 
 ## Install
 
@@ -120,7 +119,7 @@ keyboard:
 | Key | Action |
 | --- | --- |
 | `Tab` | Moves between the controls |
-| `Enter` | Opens the focused picker or presses the focused button |
+| `Enter` | Presses the focused row or button |
 | Arrows | Scroll the pane |
 | `o` / `n` | Older / newer commit |
 | `k` / `j` | Previous / next file |
@@ -135,17 +134,23 @@ From the top down:
 1. **The repository's name**, after a ✿, and a Refresh button. Under them, a line says
    whether the pane follows the newest commit or is pinned to an older one.
    It shows "Loading…" while git runs, and git's message if a step failed.
-2. **Worktree.** Every worktree of the repository, shown as its branch, or
-   "detached @ sha" without one, then its folder name. Locked worktrees are
-   marked. Bare and prunable ones are left out.
-3. **Commit.** The newest 100 commits of that worktree's HEAD, by short SHA
-   and subject. A picker shows at most 62 entries at a time, centred on the
-   selection. Its first and last entries read "↑ 12 newer commits…" and
-   "↓ 38 older commits…", and picking one steps just past that edge. The
-   worktree and file pickers page the same way. Under it are the author, the relative date, whether it is a
-   merge or the root commit, and its position in the list.
-4. **File.** The files the commit changed, with their status letter and line
-   counts. Renames show as `old → new`, and binary files say "binary".
+2. **Worktree**, a framed row showing the current worktree: its branch, or
+   "detached @ sha" without one, then its folder name. Click anywhere on the
+   row to unfold the list of every worktree under it. Click the row again,
+   or pick one, to fold it. Locked worktrees are marked. Bare and prunable
+   ones are left out.
+3. **Commit**, a framed row that unfolds the same way, listing the newest
+   100 commits of that worktree's HEAD by short SHA and subject. Under it are
+   the author, the relative date, whether it is a merge or the root commit,
+   and its position, then the Older and Newer buttons.
+4. **Files**, always unfolded: the files the commit changed, with their
+   status letter in colour and their line counts. Renames show as
+   `old → new`, and binary files say "binary". Prev and Next sit above it.
+
+Every list is a frame of whole-row buttons, so a click anywhere on a row
+picks it, and the row under the pointer is highlighted. The selected row is
+marked ▶. A list shows 8 rows around the selection. Rows at either end such
+as "↑ 12 newer commits" and "↓ 84 older commits" step past the edge.
 5. **The view**, one of three:
 
 | View | Shows |
@@ -248,7 +253,7 @@ per row in `hooks/welcome.ts`, one letter per character.
 | What | Limit | Past it |
 | --- | --- | --- |
 | Commits listed | 100 newest | Older commits are not reachable from the pane |
-| Entries in one picker | 62 at a time | "↑ … newer" and "↓ … older" entries page through the rest |
+| Rows in one list | 8 at a time | Its "↑" and "↓" rows page through the rest |
 | Text in the view | 60,000 characters | Cut on a line or hunk boundary, with a note |
 | File size for After and Before | 4 MB | A note instead of the file |
 | One git command | 20 s | That step fails and shows the error |
@@ -312,11 +317,11 @@ Code's own plugin environment, with no Node APIs.
 | --- | --- |
 | `hooks/git.ts` | The git commands and NUL-safe parsers. It makes no engine calls, so tests drive it with canned output. |
 | `hooks/register.tsx` | The hooks: the command, the refresh triggers and the pane |
-| `hooks/window.ts` | The 64-option window for long pickers |
+| `hooks/window.ts` | The window of rows a long list shows |
 | `hooks/welcome.ts` | The welcome art, with a colour mask per row |
 | `types/index.d.ts` | The state contract: the values kept in the session's plugin state |
 | `tests/git.test.ts` | Parser and fitting tests |
-| `tests/window.test.ts` | Picker window tests |
+| `tests/window.test.ts` | List window tests |
 | `tests/pane.test.tsx` | Pane tests on the terminal, desktop and mobile surfaces |
 | `.claude-plugin/plugin.json` | The manifest |
 | `.claude-plugin/marketplace.json` | Makes the repository its own marketplace |

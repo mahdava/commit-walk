@@ -52,6 +52,9 @@ export type Selection = {
   isFollowing: boolean
 }
 
+/** The lists that fold open under their row. */
+export type Expandable = 'worktree' | 'commit'
+
 /** Everything loaded for the current selection. */
 export type Snapshot = {
   repoRoot: string | null
@@ -70,6 +73,8 @@ declare module 'claude-code' {
     'commit-walk': {
       selection: Selection
       snapshot: Snapshot
+      /** Which list is unfolded below its row, if any. */
+      expanded: Expandable | null
     }
   }
 }

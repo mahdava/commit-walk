@@ -80,6 +80,32 @@ function engine(on: any, world: World, cwd = '/repo') {
   return { panes, start: cwd }
 }
 
+type Drawing = {
+  find: (q: { key: string }) => Promise<{ text?: string } | undefined>
+  findAll: (q: { type: 'Button' }) => Promise<readonly { key?: string; text?: string }[]>
+}
+
+/** The rows a list draws: the buttons keyed `<prefix>:<entry>`. */
+async function rowsOf(ui: Drawing, prefix: string) {
+  return (await ui.findAll({ type: 'Button' })).filter((row: { key?: string }) => row.key?.startsWith(`${prefix}:`))
+}
+
+/** The file the list marks as selected: the `file:` row drawn with ▶. */
+async function selectedFile(ui: Drawing) {
+  return (await rowsOf(ui, 'file')).find(row => row.text?.startsWith('▶'))?.key?.slice('file:'.length)
+}
+
+/** What a folded list's row shows as its current entry. */
+async function current(ui: Drawing, which: 'worktree' | 'commit') {
+  return (await ui.find({ key: `${which}-toggle` }))?.text ?? ''
+}
+
+/** Opens a folded list and picks an entry by its key. */
+async function pickFrom(ui: Drawing & { press: (t: { key: string }) => Promise<unknown> }, which: 'worktree' | 'commit', key: string) {
+  await ui.press({ key: `${which}-toggle` })
+  await ui.press({ key: `${which}:${key}` })
+}
+
 async function openPane($: any, surface: 'terminal' | 'desktop' | 'mobile', cwd = '/repo') {
   await $.session.start({ cwd, surface, isInteractive: true })
   const answer = await $.command.run({ command: 'commit-walk', args: '', origin: { kind: 'user' }, presentation: {} })
@@ -94,16 +120,16 @@ for (const surface of ['terminal', 'desktop'] as const) {
     const { ui, answer } = await openPane($, surface)
     expect(answer.text).toBe('Commit walk opened.')
 
-    expect((await ui.find({ key: 'worktree' }))?.props.value).toBe('/repo')
-    expect((await ui.find({ key: 'commit' }))?.props.value).toBe(sha('c'))
-    expect((await ui.find({ key: 'file' }))?.props.value).toBe('src/b.ts')
+    expect(await current(ui, 'worktree')).toMatch(/main/)
+    expect(await current(ui, 'commit')).toMatch(/ccccccc {2}Change b/)
+    expect(await selectedFile(ui)).toBe('src/b.ts')
     const diff = await ui.find({ type: 'Code' })
     expect(diff?.props.format).toBe('diff')
     expect(diff?.props.source).toBe('@@ -1 +1 @@\n-old line\n+new line in Change b')
     expect(await ui.find({ type: 'Text', text: /Following the newest commit/ })).toBeDefined()
 
     await ui.press({ key: 'next-file' })
-    expect((await ui.find({ key: 'file' }))?.props.value).toBe('src/new.ts')
+    expect(await selectedFile(ui)).toBe('src/new.ts')
 
     await ui.press({ key: 'mode-after' })
     const after = await ui.find({ type: 'Code' })
@@ -115,12 +141,13 @@ for (const surface of ['terminal', 'desktop'] as const) {
     expect(await ui.find({ type: 'Text', text: /did not exist before this commit/ })).toBeDefined()
 
     await ui.press({ key: 'older' })
-    expect((await ui.find({ key: 'commit' }))?.props.value).toBe(sha('b'))
-    expect((await ui.find({ key: 'file' }))?.props.value).toBe('src/b.ts')
+    expect(await current(ui, 'commit')).toMatch(/bbbbbbb/)
+    expect(await selectedFile(ui)).toBe('src/b.ts')
     expect(await ui.find({ type: 'Text', text: /Pinned to a past commit/ })).toBeDefined()
 
-    await ui.select({ key: 'commit', value: sha('a') })
+    await pickFrom(ui, 'commit', sha('a'))
     expect(await ui.find({ type: 'Text', text: /root commit/ })).toBeDefined()
+    expect(await rowsOf(ui, 'commit')).toEqual([])
     await ui.unmount()
   })
 }
@@ -129,9 +156,9 @@ test('another worktree reads its own log', async ($, on) => {
   const world = scenario()
   engine(on, world)
   const { ui } = await openPane($, 'terminal')
-  await ui.select({ key: 'worktree', value: '/repo-side' })
-  expect((await ui.find({ key: 'commit' }))?.props.value).toBe(sha('d'))
-  expect((await ui.find({ key: 'file' }))?.props.value).toBe('side.ts')
+  await pickFrom(ui, 'worktree', '/repo-side')
+  expect(await current(ui, 'commit')).toMatch(/ddddddd/)
+  expect(await selectedFile(ui)).toBe('side.ts')
   expect(world.runs.some(run => run.startsWith('/repo-side: log'))).toBe(true)
   await ui.unmount()
 })
@@ -142,12 +169,12 @@ test('a refresh follows a new commit while following, and keeps a pinned one', a
   const { ui } = await openPane($, 'terminal')
   world.logs['/repo']!.unshift({ sha: sha('e'), parents: [sha('c')], subject: 'Newer still', files: [{ status: 'M', path: 'src/b.ts', added: 1, deleted: 1 }] })
   await ui.press({ key: 'refresh' })
-  expect((await ui.find({ key: 'commit' }))?.props.value).toBe(sha('e'))
+  expect(await current(ui, 'commit')).toMatch(/eeeeeee/)
 
   await ui.press({ key: 'older' })
   world.logs['/repo']!.unshift({ sha: sha('f'), parents: [sha('e')], subject: 'Newest', files: [{ status: 'M', path: 'x.ts', added: 1, deleted: 0 }] })
   await ui.press({ key: 'refresh' })
-  expect((await ui.find({ key: 'commit' }))?.props.value).toBe(sha('c'))
+  expect(await current(ui, 'commit')).toMatch(/ccccccc/)
   await ui.unmount()
 })
 
@@ -160,11 +187,11 @@ test('outside a repository the pane says so', async ($, on) => {
   await ui.unmount()
 })
 
-test('a surface without Select still draws and steps', async ($, on) => {
+test('mobile draws the same foldable lists and steps', async ($, on) => {
   const world = scenario()
   engine(on, world)
   const { ui } = await openPane($, 'mobile')
-  expect(await ui.find({ key: 'commit' })).toBeUndefined()
+  expect(await ui.find({ key: 'commit-toggle' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Change b/ })).toBeDefined()
   await ui.press({ key: 'older' })
   expect(await ui.find({ type: 'Text', text: /Add b/ })).toBeDefined()
@@ -201,11 +228,11 @@ test('an edit by Claude refreshes the open pane; a read-only command does not', 
   expect(logs()).toBe(before)
   await clock.advance(1000)
   expect(logs()).toBe(before + 1)
-  expect((await ui.find({ key: 'commit' }))?.props.value).toBe(sha('e'))
+  expect(await current(ui, 'commit')).toMatch(/eeeeeee/)
   await ui.unmount()
 })
 
-test('long lists stay within 64 options and page with their edge entries', async ($, on) => {
+test('long lists show eight rows at a time and page with their edge rows', async ($, on) => {
   const world = scenario()
   const hex = (n: number) => n.toString(16).padStart(40, '0')
   const files = Array.from({ length: 400 }, (_, i) => ({ status: 'M', path: `src/file-${i}.ts`, added: 1, deleted: 1 }))
@@ -217,17 +244,21 @@ test('long lists stay within 64 options and page with their edge entries', async
   }))
   engine(on, world)
   const { ui } = await openPane($, 'terminal')
-  const commitPicker = await ui.find({ key: 'commit' })
-  const filePicker = await ui.find({ key: 'file' })
-  expect(commitPicker?.props.options.length).toBeLessThanOrEqual(64)
-  expect(filePicker?.props.options.length).toBeLessThanOrEqual(64)
-  expect(commitPicker?.props.options.at(-1)?.label).toBe('↓ 38 older commits…')
+  expect((await rowsOf(ui, 'file')).length).toBe(8)
+  expect((await ui.find({ key: 'file-after' }))?.text).toMatch(/↓ 392 more files/)
+  expect(await rowsOf(ui, 'commit')).toEqual([])
 
-  await ui.select({ key: 'commit', value: 'commit-walk:after' })
-  expect((await ui.find({ key: 'commit' }))?.props.value).toBe(hex(1000 - 62))
-  const paged = await ui.find({ key: 'commit' })
-  expect(paged?.props.options[0]?.label).toMatch(/newer commits…$/)
-  expect(paged?.props.options.length).toBeLessThanOrEqual(64)
+  await ui.press({ key: 'commit-toggle' })
+  expect((await rowsOf(ui, 'commit')).length).toBe(8)
+  expect((await ui.find({ key: 'commit-after' }))?.text).toMatch(/↓ 92 older commits/)
+  await ui.press({ key: 'commit-after' })
+  expect(await current(ui, 'commit')).toMatch(/Commit 92/)
+  expect(await rowsOf(ui, 'commit')).toEqual([])
+
+  await ui.press({ key: 'commit-toggle' })
+  expect((await ui.find({ key: 'commit-before' }))?.text).toMatch(/↑ \d+ newer commits/)
+  await ui.press({ key: 'commit-toggle' })
+  expect(await rowsOf(ui, 'commit')).toEqual([])
   await ui.unmount()
 })
 
@@ -238,10 +269,10 @@ test('a worktree with no commits shows the welcome art and waits', async ($, on)
   const { ui } = await openPane($, 'terminal')
   expect(await ui.find({ type: 'Text', text: /No commits on main yet/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
-  expect(await ui.find({ key: 'worktree' })).toBeDefined()
+  expect(await ui.find({ key: 'worktree-toggle' })).toBeDefined()
   world.logs['/repo'] = scenario().logs['/repo']!
   await ui.press({ key: 'refresh' })
-  expect((await ui.find({ key: 'commit' }))?.props.value).toBe(sha('c'))
+  expect(await current(ui, 'commit')).toMatch(/ccccccc/)
   await ui.unmount()
 })
 
@@ -288,4 +319,23 @@ test('the welcome art is sized to the pane: large, medium, small, or a one-line 
   expect((await welcomeOf(mark)).type).toBe('Text')
   expect(await mark.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
   await mark.unmount()
+})
+
+test('the file list: a row press selects that file, the edge rows page', async ($, on) => {
+  const world = scenario()
+  const files = Array.from({ length: 20 }, (_, i) => ({ status: 'M', path: `src/f${String(i).padStart(2, '0')}.ts`, added: 1, deleted: 0 }))
+  world.logs['/repo']![0]!.files = files
+  engine(on, world)
+  const { ui } = await openPane($, 'terminal')
+  expect(await selectedFile(ui)).toBe('src/f00.ts')
+  expect(await ui.find({ key: 'file-before' })).toBeUndefined()
+
+  await ui.press({ key: 'file:src/f05.ts' })
+  expect(await selectedFile(ui)).toBe('src/f05.ts')
+
+  await ui.press({ key: 'file-after' })
+  expect(await selectedFile(ui)).toBe('src/f09.ts')
+  expect((await ui.find({ key: 'file-before' }))?.text).toMatch(/↑ \d+ earlier files/)
+  expect((await rowsOf(ui, 'file')).length).toBe(8)
+  await ui.unmount()
 })
