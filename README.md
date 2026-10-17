@@ -1,5 +1,7 @@
 # commit-walk
 
+<p align="center"><img src="assets/logo.png" alt="Commit Walk: a sunflower in green sneakers walking along a line of commits" width="320"></p>
+
 A Claude Code pane for walking a Git repository worktree by worktree and
 commit by commit. Pick a worktree, a commit and one of its changed files.
 Read the file as a diff, or as the whole file after or before the commit.
@@ -12,8 +14,7 @@ Everything comes from git and is only read. The plugin gives the model no
 tool, writes nothing to the repository and makes no network requests.
 
 ```
- Commit walk
- notsofast  [ Refresh ]
+ ✿ notsofast  [ Refresh ]
  Following the newest commit
 
  Worktree  main  ·  notsofast                                ▾
@@ -132,14 +133,17 @@ keyboard:
 
 From the top down:
 
-1. **The repository's name** and a Refresh button. Under them, a line says
+1. **The repository's name**, after a ✿, and a Refresh button. Under them, a line says
    whether the pane follows the newest commit or is pinned to an older one.
    It shows "Loading…" while git runs, and git's message if a step failed.
 2. **Worktree.** Every worktree of the repository, shown as its branch, or
    "detached @ sha" without one, then its folder name. Locked worktrees are
    marked. Bare and prunable ones are left out.
 3. **Commit.** The newest 100 commits of that worktree's HEAD, by short SHA
-   and subject. Under it are the author, the relative date, whether it is a
+   and subject. A picker shows at most 62 entries at a time, centred on the
+   selection. Its first and last entries read "↑ 12 newer commits…" and
+   "↓ 38 older commits…", and picking one steps just past that edge. The
+   worktree and file pickers page the same way. Under it are the author, the relative date, whether it is a
    merge or the root commit, and its position in the list.
 4. **File.** The files the commit changed, with their status letter and line
    counts. Renames show as `old → new`, and binary files say "binary".
@@ -162,6 +166,33 @@ The status letters are git's own:
 | `C` | Copied |
 | `T` | Type changed, for example a file became a symlink |
 | `U` | Unmerged |
+
+### The welcome screen
+
+The sunflower from the logo walks a commit line whenever there is nothing to
+walk yet:
+
+```
+            \   \ | /   /
+         '.  .-'''''''-.  .'
+      --   /  ●       ●  \   --
+     ~~~  |       ◡       |  ~~~
+      --   \             /   --
+         .'  '-._____.-'  '.
+       ,-.  /    | |    \  ,-.
+      (__/       | |       \__)
+                /   \
+            ___/     \___   ))
+           (____)   (____)
+  ●━━━━━━━━━━━●━━━━━━━━━━━●━━━━━━━━━━━●
+
+                Commit Walk
+```
+
+It shows while the repository is first read, outside a repository, and on a
+worktree with no commits yet. On a new worktree the pane waits there and
+moves to the first commit as soon as it lands. The art is drawn in the
+logo's colours. A pane narrower than the art shows a one-line ✿ mark.
 
 ## How it behaves
 
@@ -194,7 +225,7 @@ The status letters are git's own:
 | What | Limit | Past it |
 | --- | --- | --- |
 | Commits listed | 100 newest | Older commits are not reachable from the pane |
-| Files listed per commit | 400 | The pane says how many are left out |
+| Entries in one picker | 62 at a time | "↑ … newer" and "↓ … older" entries page through the rest |
 | Text in the view | 60,000 characters | Cut on a line or hunk boundary, with a note |
 | File size for After and Before | 4 MB | A note instead of the file |
 | One git command | 20 s | That step fails and shows the error |
@@ -235,9 +266,12 @@ repository. Start Claude Code inside one.
 pane. A headless `claude -p` run draws nothing. In a terminal, widen the
 window.
 
-**The pane closed right after opening.** Claude Code refused to draw it.
-Start Claude Code with `--debug` and look for a `ui.render (Pane) refused`
-line naming commit-walk.
+**The pane is empty, or closed right after opening.** Claude Code refused
+to draw it. Versions before 1.1.0 did this on any branch with more than 64
+commits, because a picker may hold at most 64 options. Update the plugin.
+Otherwise, Claude Code refused the drawing for another reason.
+Start Claude Code with `--debug` and look for a line containing
+`ui.render (Pane)` and `does not validate`. It names the reason.
 
 **A diff draws as plain text.** The diff was not in a form the code view
 can colour. The debug log gives the reason on a line containing
@@ -255,11 +289,15 @@ Code's own plugin environment, with no Node APIs.
 | --- | --- |
 | `hooks/git.ts` | The git commands and NUL-safe parsers. It makes no engine calls, so tests drive it with canned output. |
 | `hooks/register.tsx` | The hooks: the command, the refresh triggers and the pane |
+| `hooks/window.ts` | The 64-option window for long pickers |
+| `hooks/welcome.ts` | The welcome art, with a colour mask per row |
 | `types/index.d.ts` | The state contract: the values kept in the session's plugin state |
 | `tests/git.test.ts` | Parser and fitting tests |
+| `tests/window.test.ts` | Picker window tests |
 | `tests/pane.test.tsx` | Pane tests on the terminal, desktop and mobile surfaces |
 | `.claude-plugin/plugin.json` | The manifest |
 | `.claude-plugin/marketplace.json` | Makes the repository its own marketplace |
+| `assets/logo.png` | The logo |
 
 Checks:
 

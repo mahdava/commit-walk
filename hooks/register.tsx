@@ -12,13 +12,13 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { ChangedFile, Commit, Content, Selection, Snapshot, ViewMode, Worktree } from '../types'
 import { createRepo, type GitRun, type Repo } from './git'
+import { ART, ART_WIDTH, DIM_TONES, TONE_COLOR, artRuns } from './welcome'
+import { AFTER_VALUE, BEFORE_VALUE, pickedIndex, windowAround } from './window'
 
 const PANE = 'commit-walk'
 const TITLE = 'Commit walk'
 /** Width the dock asks for beside a fullscreen transcript. */
 const PANE_COLUMNS = 84
-/** Files listed in the picker; a larger commit says how many are left out. */
-const MAX_FILE_OPTIONS = 400
 /** Debounce for refreshes after edits and turns. */
 const REFRESH_DELAY_MS = 400
 const GIT_TIMEOUT_MS = 20_000
@@ -274,9 +274,46 @@ export const register: Register = on => {
     const snap = await read($, snapshot)
     const width = Math.max(24, e.props.bodyColumns)
 
+    // The sunflower over a commit line, centred; one line where the pane is too narrow for it.
+    const welcome = () => {
+      if (width < ART_WIDTH + 2) {
+        return (
+          <Text bold color={TONE_COLOR.leaf}>
+            <Text color={TONE_COLOR.petal}>✿</Text> Commit Walk
+          </Text>
+        )
+      }
+      const pad = ' '.repeat(Math.max(0, Math.floor((width - ART_WIDTH) / 2)))
+      const title = 'Commit Walk'
+      return (
+        <Box flexDirection="column">
+          {ART.map((_, row) => (
+            <Text key={`art-${row}`} wrap="truncate-end">
+              {pad}
+              {artRuns(row).map((run, i) =>
+                run.tone === null ? (
+                  run.text
+                ) : (
+                  <Text key={`r${i}`} color={TONE_COLOR[run.tone]} dimColor={DIM_TONES.has(run.tone)}>
+                    {run.text}
+                  </Text>
+                ),
+              )}
+            </Text>
+          ))}
+          <Text> </Text>
+          <Text bold color={TONE_COLOR.leaf}>
+            {' '.repeat(Math.max(0, Math.floor((width - title.length) / 2)))}
+            {title}
+          </Text>
+        </Box>
+      )
+    }
+
     if (snap.repoRoot === null && snap.error) {
       return (
         <Box flexDirection="column" gap={1}>
+          {welcome()}
           <Text bold>No repository to review</Text>
           <Text color="red">{snap.error}</Text>
           <Text dimColor>Start Claude Code inside a Git repository, then run /commits.</Text>
@@ -286,7 +323,14 @@ export const register: Register = on => {
         </Box>
       )
     }
-    if (snap.repoRoot === null) return <Text dimColor>Reading the repository…</Text>
+    if (snap.repoRoot === null) {
+      return (
+        <Box flexDirection="column" gap={1}>
+          {welcome()}
+          <Text dimColor>Reading the repository…</Text>
+        </Box>
+      )
+    }
 
     const worktree = snap.worktrees.find(wt => wt.path === sel.worktree)
     const commitAt = snap.commits.findIndex(one => one.sha === sel.commit)
@@ -295,13 +339,46 @@ export const register: Register = on => {
     const file = snap.files[fileAt]
     const content = snap.content
 
-    const pick = (key: string, label: string, value: string | undefined, options: { value: string; label: string }[], onPick: (value: string) => void) => {
-      if (options.length === 0) return <Text dimColor>{label}none</Text>
-      if (Select) {
-        return <Select key={key} label={label} value={value} options={options} onSelect={(picked: string) => onPick(picked)} />
+    /**
+     * A picker over a list of any length: at most 64 options (Claude Code's
+     * limit for a Select), as a window around the selected entry with an entry
+     * at each end that steps past the edge.
+     */
+    const pick = <T,>(spec: {
+      key: string
+      label: string
+      items: readonly T[]
+      at: number
+      valueOf: (item: T) => string
+      labelOf: (item: T) => string
+      edges: { before: (n: number) => string; after: (n: number) => string }
+      onPick: (item: T) => void
+    }) => {
+      if (spec.items.length === 0) return <Text dimColor>{spec.label}none</Text>
+      const current = spec.items[spec.at]
+      if (!Select) {
+        // Surfaces without a Select (mobile) get the current value and the step buttons.
+        return <Text>{spec.label}{current ? spec.labelOf(current) : ''}</Text>
       }
-      // Surfaces without a Select (mobile) get the current value and the step buttons.
-      return <Text>{label}{options.find(option => option.value === value)?.label ?? ''}</Text>
+      const win = windowAround(spec.items, spec.at)
+      const room = width - spec.label.length - 4
+      const options = [
+        ...(win.before > 0 ? [{ value: BEFORE_VALUE, label: clip(spec.edges.before(win.before), room) }] : []),
+        ...win.items.map(item => ({ value: spec.valueOf(item), label: clip(spec.labelOf(item), room) })),
+        ...(win.after > 0 ? [{ value: AFTER_VALUE, label: clip(spec.edges.after(win.after), room) }] : []),
+      ]
+      return (
+        <Select
+          key={spec.key}
+          label={spec.label}
+          value={current ? spec.valueOf(current) : undefined}
+          options={options}
+          onSelect={(picked: string) => {
+            const target = spec.items[pickedIndex(win, picked, spec.valueOf)]
+            if (target !== undefined) spec.onPick(target)
+          }}
+        />
+      )
     }
 
     const mode = (key: ViewMode, label: string, hotkey: string) => (
@@ -315,37 +392,64 @@ export const register: Register = on => {
       </Button>
     )
 
+    const header = (
+      <Box flexDirection="column">
+        <Box flexDirection="row" gap={1}>
+          <Text bold>
+            <Text color={TONE_COLOR.petal}>✿</Text> {clip(baseName(snap.repoRoot), width - 16)}
+          </Text>
+          <Button key="refresh" hotkey="r" onPress={() => void load($, 'repo')}>Refresh</Button>
+        </Box>
+        <Text dimColor wrap="truncate-end">{snap.isLoading ? 'Loading…' : sel.isFollowing ? 'Following the newest commit' : 'Pinned to a past commit'}</Text>
+        {snap.error ? <Text color="red">{snap.error}</Text> : null}
+      </Box>
+    )
+
+    const worktreePicker = pick({
+      key: 'worktree',
+      label: 'Worktree  ',
+      items: snap.worktrees,
+      at: snap.worktrees.findIndex(wt => wt.path === worktree?.path),
+      valueOf: wt => wt.path,
+      labelOf: worktreeLabel,
+      edges: { before: n => `↑ ${n} more worktrees…`, after: n => `↓ ${n} more worktrees…` },
+      onPick: wt => void load($, 'repo', { worktree: wt.path, commit: null, file: null }),
+    })
+
+    // A worktree with no commits yet: the welcome art, until the first one lands.
+    if (snap.commits.length === 0) {
+      const where = worktree?.branch ?? 'this worktree'
+      return (
+        <Box flexDirection="column" gap={1}>
+          {header}
+          {worktreePicker}
+          {welcome()}
+          <Text>No commits on {where} yet.</Text>
+          <Text dimColor>The pane follows the first one as soon as it lands. Press r to look again.</Text>
+        </Box>
+      )
+    }
+
     return (
       <Box flexDirection="column" gap={1}>
-        <Box flexDirection="column">
-          <Box flexDirection="row" gap={1}>
-            <Text bold>{clip(baseName(snap.repoRoot), width - 14)}</Text>
-            <Button key="refresh" hotkey="r" onPress={() => void load($, 'repo')}>Refresh</Button>
-          </Box>
-          <Text dimColor wrap="truncate-end">{snap.isLoading ? 'Loading…' : sel.isFollowing ? 'Following the newest commit' : 'Pinned to a past commit'}</Text>
-          {snap.error ? <Text color="red">{snap.error}</Text> : null}
-        </Box>
-
-        {pick(
-          'worktree',
-          'Worktree  ',
-          worktree?.path,
-          snap.worktrees.map(wt => ({ value: wt.path, label: clip(worktreeLabel(wt), width - 12) })),
-          path => void load($, 'repo', { worktree: path, commit: null, file: null }),
-        )}
+        {header}
+        {worktreePicker}
 
         <Box flexDirection="column">
-          {pick(
-            'commit',
-            'Commit    ',
-            commit?.sha,
-            snap.commits.map(one => ({ value: one.sha, label: clip(commitLabel(one), width - 12) })),
-            sha => void load($, 'commit', { commit: sha, file: null }),
-          )}
+          {pick({
+            key: 'commit',
+            label: 'Commit    ',
+            items: snap.commits,
+            at: commitAt,
+            valueOf: one => one.sha,
+            labelOf: commitLabel,
+            edges: { before: n => `↑ ${n} newer commits…`, after: n => `↓ ${n} older commits…` },
+            onPick: one => void load($, 'commit', { commit: one.sha, file: null }),
+          })}
           {commit ? (
             <Text dimColor wrap="truncate-end">
               {commit.author} · {commit.when}
-              {commit.parents.length > 1 ? ` · merge, against its first parent` : ''}
+              {commit.parents.length > 1 ? ' · merge, against its first parent' : ''}
               {commit.parents.length === 0 ? ' · root commit' : ''}
               {` · ${commitAt + 1} of ${snap.commits.length}`}
             </Text>
@@ -357,16 +461,16 @@ export const register: Register = on => {
         </Box>
 
         <Box flexDirection="column">
-          {pick(
-            'file',
-            'File      ',
-            file?.path,
-            snap.files.slice(0, MAX_FILE_OPTIONS).map(one => ({ value: one.path, label: clip(fileLabel(one), width - 12) })),
-            path => void load($, 'content', { file: path }),
-          )}
-          {snap.files.length > MAX_FILE_OPTIONS ? (
-            <Text dimColor>Listing {MAX_FILE_OPTIONS} of {snap.files.length} files.</Text>
-          ) : null}
+          {pick({
+            key: 'file',
+            label: 'File      ',
+            items: snap.files,
+            at: fileAt,
+            valueOf: one => one.path,
+            labelOf: fileLabel,
+            edges: { before: n => `↑ ${n} earlier files…`, after: n => `↓ ${n} more files…` },
+            onPick: one => void load($, 'content', { file: one.path }),
+          })}
           <Box flexDirection="row" gap={1}>
             <Button key="prev-file" hotkey="k" dimColor={fileAt <= 0} onPress={() => void stepFile($, -1)}>Prev file</Button>
             <Button key="next-file" hotkey="j" dimColor={fileAt < 0 || fileAt >= snap.files.length - 1} onPress={() => void stepFile($, 1)}>Next file</Button>

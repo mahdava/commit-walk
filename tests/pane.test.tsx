@@ -204,3 +204,54 @@ test('an edit by Claude refreshes the open pane; a read-only command does not', 
   expect((await ui.find({ key: 'commit' }))?.props.value).toBe(sha('e'))
   await ui.unmount()
 })
+
+test('long lists stay within 64 options and page with their edge entries', async ($, on) => {
+  const world = scenario()
+  const hex = (n: number) => n.toString(16).padStart(40, '0')
+  const files = Array.from({ length: 400 }, (_, i) => ({ status: 'M', path: `src/file-${i}.ts`, added: 1, deleted: 1 }))
+  world.logs['/repo'] = Array.from({ length: 100 }, (_, i) => ({
+    sha: hex(1000 - i),
+    parents: i === 99 ? [] : [hex(999 - i)],
+    subject: `Commit ${100 - i}`,
+    files,
+  }))
+  engine(on, world)
+  const { ui } = await openPane($, 'terminal')
+  const commitPicker = await ui.find({ key: 'commit' })
+  const filePicker = await ui.find({ key: 'file' })
+  expect(commitPicker?.props.options.length).toBeLessThanOrEqual(64)
+  expect(filePicker?.props.options.length).toBeLessThanOrEqual(64)
+  expect(commitPicker?.props.options.at(-1)?.label).toBe('↓ 38 older commits…')
+
+  await ui.select({ key: 'commit', value: 'commit-walk:after' })
+  expect((await ui.find({ key: 'commit' }))?.props.value).toBe(hex(1000 - 62))
+  const paged = await ui.find({ key: 'commit' })
+  expect(paged?.props.options[0]?.label).toMatch(/newer commits…$/)
+  expect(paged?.props.options.length).toBeLessThanOrEqual(64)
+  await ui.unmount()
+})
+
+test('a worktree with no commits shows the welcome art and waits', async ($, on) => {
+  const world = scenario()
+  world.logs['/repo'] = []
+  engine(on, world)
+  const { ui } = await openPane($, 'terminal')
+  expect(await ui.find({ type: 'Text', text: /No commits on main yet/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
+  expect(await ui.find({ key: 'worktree' })).toBeDefined()
+  world.logs['/repo'] = scenario().logs['/repo']!
+  await ui.press({ key: 'refresh' })
+  expect((await ui.find({ key: 'commit' }))?.props.value).toBe(sha('c'))
+  await ui.unmount()
+})
+
+test('a narrow pane draws the one-line mark instead of the art', async ($, on) => {
+  const world = scenario()
+  engine(on, world, '/nowhere')
+  await $.session.start({ cwd: '/nowhere', surface: 'terminal', isInteractive: true } as never)
+  await $.command.run({ command: 'commits', args: '', origin: { kind: 'user' }, presentation: {} } as never)
+  const ui = await $.ui.mount({ plugin: 'commit-walk', surface: 'terminal', ...PANE, props: { ...PANE.props, bodyColumns: 30 } })
+  expect(await ui.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
+  expect(await ui.find({ key: 'art-0' })).toBeUndefined()
+  await ui.unmount()
+})
