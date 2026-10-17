@@ -172,6 +172,13 @@ A list shows 8 rows. A longer one gets a scroll column on its right:
 - **The thumb** in between shows where the visible rows are.
 - **A line under the list** reads "9–16 of 40 files".
 
+A row too long for the pane ends in "…". Hovering it shows its whole line
+in a card just below it, which disappears when the pointer leaves. That
+needs a terminal that reports the pointer, like Claude Code's fullscreen
+mode. When the selected file's row is cut, its whole name, `old → new` for
+a rename, also appears under the file list, so it is readable without a
+pointer too.
+
 A scrolled list stays where you put it. It comes back around the selection
 only when the selection moves out of view, for example with `j` or `k`.
 

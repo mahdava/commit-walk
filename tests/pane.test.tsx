@@ -6,7 +6,7 @@ const PANE = {
   props: { title: 'Commit walk', isFocused: true, bodyColumns: 84, placement: 'dock', scroll: { offset: 0, bodyRows: 80 }, view: {} },
 } as const
 
-type FakeCommit = { sha: string; parents: string[]; subject: string; files: { status: string; path: string; added: number; deleted: number }[] }
+type FakeCommit = { sha: string; parents: string[]; subject: string; files: { status: string; path: string; oldPath?: string; added: number; deleted: number }[] }
 
 const sha = (c: string) => c.repeat(40)
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
@@ -72,8 +72,9 @@ function fakeGit(world: World, cwd: string, args: readonly string[]) {
       const end = args.includes('--') ? args.indexOf('--') : args.length
       const target = commitOf(args.slice(0, end).reverse().find(arg => commitOf(arg) !== undefined))
       if (!target) return { exitCode: 128, stdout: '', stderr: 'fatal: bad object' }
-      if (args.includes('--name-status')) return ok(target.files.flatMap(f => [f.status, f.path]).join('\0') + '\0')
-      if (args.includes('--numstat')) return ok(target.files.map(f => `${f.added}\t${f.deleted}\t${f.path}`).join('\0') + '\0')
+      // Renames as git writes them: a score and both paths; numstat names both after an empty path.
+      if (args.includes('--name-status')) return ok(target.files.flatMap(f => (f.oldPath ? [`${f.status}100`, f.oldPath, f.path] : [f.status, f.path])).join('\0') + '\0')
+      if (args.includes('--numstat')) return ok(target.files.map(f => (f.oldPath ? `${f.added}\t${f.deleted}\t\0${f.oldPath}\0${f.path}` : `${f.added}\t${f.deleted}\t${f.path}`)).join('\0') + '\0')
       const path = args[args.length - 1] ?? ''
       return ok(`diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-old line\n+new line in ${target.subject}\n`)
     }
@@ -466,5 +467,29 @@ test('a repository whose default branch is master, with no origin/HEAD', async (
   expect((await ui.find({ key: 'range-notInDefault' }))?.text).toBe('not in master · 1')
   // master is both the default and the nearest branch: no separate base option.
   expect(await ui.find({ key: 'range-base' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a clipped row carries a hover card with its whole line; the selected file shows its full name', async ($, on) => {
+  const world = scenario()
+  const long = 'src/components/a/very/deeply/nested/folder/structure/that/keeps/going/Component.tsx'
+  world.logs['/repo']![0]!.files = [
+    { status: 'R', oldPath: 'src/Old.tsx', path: long, added: 3, deleted: 1 },
+    { status: 'M', path: 'src/short.ts', added: 1, deleted: 0 },
+  ]
+  engine(on, world)
+  const { ui } = await openPane($, 'terminal')
+  const tree = JSON.stringify(await ui.drawn())
+  // The card: hidden, revealed on hover, absolute, holding the whole line in inverse video.
+  const card = /"position":"absolute","top":1,"left":(\d+),"display":"none","flexDirection":"column"\},"hover":\{"display":"flex"\}/
+  expect(card.test(tree)).toBe(true)
+  expect(tree.match(new RegExp(card.source, 'g'))?.length).toBe(1)
+  const cardText = [...tree.matchAll(/"inverse":true\},"children":\[" ([^"]*) "\]/g)].map(m => m[1]!.trimEnd()).join('')
+  expect(cardText).toBe(`src/Old.tsx → ${long}  +3 −1`)
+  // The selected (first) file's whole name under the list.
+  expect(await ui.find({ type: 'Text', text: new RegExp(`^▶ src\\/Old\\.tsx → ${long.replace(/\//g, '\\/')}$`) })).toBeDefined()
+
+  await ui.press({ key: 'file:src/short.ts' })
+  expect(await ui.find({ type: 'Text', text: /^▶ src\/short\.ts$/ })).toBeUndefined()
   await ui.unmount()
 })

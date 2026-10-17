@@ -463,6 +463,26 @@ export const register: Register = on => {
     const pad = (text: string, room = inner) => text.padEnd(room).slice(0, room)
 
     /**
+     * The full text of a clipped row, revealed while the pointer is over the
+     * row (its keyed Box): drawn below it, over the rows that follow, without
+     * moving them. Inverse video makes it a solid block in any theme. Claude
+     * Code shows it where the terminal reports the pointer; no hook runs.
+     */
+    const hoverCard = (key: string, full: string, indent: number) => {
+      const cardWidth = Math.max(10, inner - indent - 1)
+      const lines: string[] = []
+      for (let at = 0; at < full.length; at += cardWidth - 2) lines.push(full.slice(at, at + cardWidth - 2))
+      return (
+        // No key: a keyed Box would scope the hover to itself, hidden and never hovered. The row's keyed Box is the scope.
+        <Box position="absolute" top={1} left={indent} display="none" hover={{ display: 'flex' }} flexDirection="column">
+          {lines.map((line, i) => (
+            <Text key={`${key}-${i}`} inverse>{` ${line.padEnd(cardWidth - 2)} `}</Text>
+          ))}
+        </Box>
+      )
+    }
+
+    /**
      * The rows of a list, LIST_ROWS at a time. Each row: a ▶ on the selected
      * one, an optional coloured tag, the entry's text as a whole-row button.
      * A longer list gets a scroll column on the right: ▲ and ▼ page through it
@@ -493,6 +513,8 @@ export const register: Register = on => {
         const isSelected = start + i === spec.at
         const tag = spec.tagOf?.(item)
         const used = 2 + (tag ? tag.text.length + 2 : 0)
+        const full = spec.textOf(item)
+        const isClipped = full.length > room - used - 1
         return (
           // The marker and the coloured tag are text in front of the button,
           // which holds one string: Claude Code before 2.1.300 refuses a
@@ -501,8 +523,9 @@ export const register: Register = on => {
             <Text color={isSelected ? TONE_COLOR.petal : undefined} bold={isSelected}>{isSelected ? '▶ ' : '  '}</Text>
             {tag ? <Text color={tag.color}>{tag.text}  </Text> : null}
             <Button key={`${spec.prefix}:${spec.keyOf(item)}`} plain onPress={() => spec.onPick(item)}>
-              {pad(clip(spec.textOf(item), room - used - 1), room - used)}
+              {pad(clip(full, room - used - 1), room - used)}
             </Button>
+            {isClipped ? hoverCard(`${spec.prefix}-card:${spec.keyOf(item)}`, full, used) : null}
           </Box>
         )
       })
@@ -558,6 +581,9 @@ export const register: Register = on => {
         </Box>
       )
     }
+
+    const fileName = (one: ChangedFile) => (one.oldPath && one.oldPath !== one.path ? `${one.oldPath} → ${one.path}` : one.path)
+    const fileText = (one: ChangedFile) => `${fileName(one)}  ${one.isBinary ? 'binary' : `+${one.added} −${one.deleted}`}`
 
     const header = (
       <Box flexDirection="column">
@@ -675,14 +701,15 @@ export const register: Register = on => {
               at: fileAt,
               keyOf: one => one.path,
               tagOf: one => ({ text: one.status, color: STATUS_COLOR[one.status] }),
-              textOf: one => {
-                const name = one.oldPath && one.oldPath !== one.path ? `${one.oldPath} → ${one.path}` : one.path
-                return `${name}  ${one.isBinary ? 'binary' : `+${one.added} −${one.deleted}`}`
-              },
+              textOf: fileText,
               noun: { one: 'file', many: 'files' },
               onPick: one => void load($, 'content', { file: one.path }),
             })}
           </Box>
+          {file && fileText(file).length > inner - (snap.files.length > LIST_ROWS ? 2 : 0) - 6 ? (
+            // The selected file's whole name when its row is cut: renames and deep paths, for every surface and the keyboard.
+            <Text dimColor wrap="wrap">{`▶ ${fileName(file)}`}</Text>
+          ) : null}
         </Box>
 
         <Box flexDirection="row" gap={1}>
