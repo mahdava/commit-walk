@@ -34,7 +34,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
   repoRoot: null,
   worktrees: [],
   commits: [],
-  ranges: { branch: null, notInDefault: null, base: null },
+  ranges: { branch: null, isOnDefault: false, notInDefault: null, base: null },
   range: 'all',
   files: [],
   content: null,
@@ -642,16 +642,45 @@ export const register: Register = on => {
     })
 
     // A worktree with no commits yet: the welcome art, until the first one lands.
+    // Nothing to walk: the welcome art, until a commit lands. Under "not in
+    // default" that is the default branch itself (no work happens there) or a
+    // branch level with it; otherwise a worktree with no commits at all.
     if (snap.commits.length === 0) {
       const where = worktree?.branch ?? 'this worktree'
+      const defaultRef = snap.ranges.notInDefault?.ref ?? 'the default branch'
+      const isNotInDefault = snap.range === 'notInDefault'
+      const showAll = (
+        <Box>
+          <Button key="show-all" hotkey="h" onPress={() => void load($, 'commit', { range: 'all', commit: null, file: null })}>
+            Show all commits
+          </Button>
+        </Box>
+      )
       return (
         <Box flexDirection="column" gap={1}>
           {header}
           {debugSection()}
           {worktreePicker}
+          {rangeRow}
           {welcome()}
-          <Text>No commits on {where} yet.</Text>
-          <Text dimColor>The pane follows the first one as soon as it lands. Press r to look again.</Text>
+          {isNotInDefault && snap.ranges.isOnDefault ? (
+            <Box flexDirection="column" gap={1}>
+              <Text>You're on {where}. Work happens on branches, so there is nothing new to walk here.</Text>
+              <Text dimColor>Pick a worktree above, or show the whole history.</Text>
+              {showAll}
+            </Box>
+          ) : isNotInDefault ? (
+            <Box flexDirection="column" gap={1}>
+              <Text>No commits on {where} beyond {defaultRef} yet.</Text>
+              <Text dimColor>The pane follows the first one as soon as it lands. Press r to look again.</Text>
+              {showAll}
+            </Box>
+          ) : (
+            <Box flexDirection="column">
+              <Text>No commits on {where} yet.</Text>
+              <Text dimColor>The pane follows the first one as soon as it lands. Press r to look again.</Text>
+            </Box>
+          )}
         </Box>
       )
     }

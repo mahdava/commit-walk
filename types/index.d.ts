@@ -51,6 +51,8 @@ export type Range = { ref: string; count: number }
 /** The ranges a worktree offers besides its whole history. */
 export type Ranges = {
   branch: string | null
+  /** True when the worktree is on the default branch itself. */
+  isOnDefault: boolean
   notInDefault: Range | null
   base: Range | null
 }

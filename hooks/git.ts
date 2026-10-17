@@ -270,8 +270,10 @@ export function createRepo(run: GitRunner) {
       }
       const defaultAhead = defaultRef ? await countSince(defaultRef) : null
       const defaultName = defaultRef?.replace(/^origin\//, '') ?? null
-      // On the default branch itself, or level with it, there is nothing to narrow to.
-      const notInDefault = defaultRef && defaultAhead && branch !== defaultName ? { ref: defaultRef, count: defaultAhead } : null
+      // Offered wherever there is a default branch: on it, or on a branch level with it, the
+      // range is empty, and the pane shows its welcome screen until a commit lands.
+      const notInDefault = defaultRef && defaultAhead !== null ? { ref: defaultRef, count: defaultAhead } : null
+      const isOnDefault = defaultName !== null && branch === defaultName
 
       // One command for every branch's distance (git 2.41+); older git offers no base.
       const listed = await run(cwd, ['for-each-ref', '--format=%(refname:short)%09%(ahead-behind:HEAD)', 'refs/heads'])
@@ -290,7 +292,7 @@ export function createRepo(run: GitRunner) {
           base = { ref: best.ref, count: best.mine }
         }
       }
-      return { branch, notInDefault, base }
+      return { branch, isOnDefault, notInDefault, base }
     },
 
     /** The commits of HEAD, newest first; with `since`, only those not reachable from it (`since..HEAD`). */

@@ -150,10 +150,14 @@ From the top down:
      from, for stacked branches. Offered when that base is not the default
      branch itself.
 
-   **not in** is chosen by default. Where a worktree does not offer it, on
-   the default branch itself for example, the list shows all commits, and
-   the next worktree that offers it opens on it again. A range you pick
-   becomes the choice and follows you across worktrees the same way.
+   **not in** is chosen by default, since work normally happens on
+   branches. On the default branch itself, or on a branch level with it,
+   that range is empty and the pane shows the welcome screen. On the
+   default branch it says so and offers **Show all commits** (`h`). On a
+   branch level with it, the pane waits there and moves to the first commit
+   as soon as it lands. A range you pick becomes the choice and follows you
+   across worktrees; where a worktree does not offer it, the list shows all
+   commits.
 
    The default branch is whatever `origin/HEAD` points at, `master`
    included. Without `origin/HEAD` it is local `main`, local `master`,
@@ -240,8 +244,9 @@ walk yet:
                  Commit Walk
 ```
 
-It shows while the repository is first read, outside a repository, and on a
-worktree with no commits yet. On a new worktree the pane waits there and
+It shows while the repository is first read, outside a repository, on a
+worktree with no commits yet, and under "not in" on the default branch or a
+branch with nothing beyond it. On a new worktree the pane waits there and
 moves to the first commit as soon as it lands.
 
 The art is drawn in the logo's colours: yellow petals with orange outlines,

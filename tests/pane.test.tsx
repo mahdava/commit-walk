@@ -24,10 +24,10 @@ function scenario() {
     runs: [] as string[],
     /** The branch each worktree is on. */
     branches: { '/repo': 'main', '/repo-side': 'side' } as Record<string, string>,
-    /** origin/HEAD's target, or null for a clone without one. */
-    originHead: 'origin/main' as string | null,
+    /** origin/HEAD's target, or null for a clone without one. Off by default: most tests walk history. */
+    originHead: null as string | null,
     /** The refs that exist, for `rev-parse --verify`. */
-    refs: ['refs/heads/main'] as string[],
+    refs: [] as string[],
     /** Per worktree, `rev-list --count <ref>..HEAD` per ref: HEAD's commits the ref lacks. */
     ahead: {} as Record<string, Record<string, number>>,
     /** Per worktree, `for-each-ref … ahead-behind:HEAD` lines: `<branch>\t<theirs> <mine>`. */
@@ -430,12 +430,14 @@ test('the Commits row offers what the worktree has: not in the default branch, s
     sha: hex(500 - i), parents: [hex(499 - i)], subject: `Side ${5 - i}`,
     files: [{ status: 'M', path: 'side.ts', added: 1, deleted: 0 }],
   }))
+  world.originHead = 'origin/main'
   world.ahead = { '/repo-side': { 'origin/main': 3, 'feat-base': 2 } }
   world.distances = { '/repo-side': 'main\t4 3\nside\t0 0\nfeat-base\t1 2\nchild\t2 0\nfar\t9 4\n' }
   engine(on, world)
   const { ui } = await openPane($, 'terminal')
-  // On main itself there is nothing to narrow to: the row is hidden.
-  expect(await ui.find({ key: 'range-all' })).toBeUndefined()
+  // On main itself "not in origin/main" is empty: the welcome screen, with the row to switch.
+  expect(await ui.find({ type: 'Text', text: /You're on main\. Work happens on branches/ })).toBeDefined()
+  expect((await ui.find({ key: 'range-notInDefault' }))?.text).toBe('not in origin/main · 0')
 
   await pickFrom(ui, 'worktree', '/repo-side')
   // "not in the default branch" is the default where it is offered.
@@ -503,24 +505,59 @@ test('the range preference: not in default by default, all where not offered, a 
     sha: hex(500 - i), parents: [hex(499 - i)], subject: `Side ${5 - i}`,
     files: [{ status: 'M', path: 'side.ts', added: 1, deleted: 0 }],
   }))
+  world.originHead = 'origin/main'
   world.ahead = { '/repo-side': { 'origin/main': 2 } }
   engine(on, world)
   const { ui } = await openPane($, 'terminal')
-  // On main the preference is not on offer: all three commits show.
-  expect(await ui.find({ key: 'range-all' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /1 of 3$/ })).toBeDefined()
+  // On main "not in" is empty: the welcome screen instead of main's history.
+  expect(await ui.find({ type: 'Text', text: /You're on main/ })).toBeDefined()
 
-  // The fallback on main did not reset it: the feature worktree opens on "not in".
+  // The feature worktree opens on "not in".
   await pickFrom(ui, 'worktree', '/repo-side')
   expect((await ui.find({ key: 'range-notInDefault' }))?.props.variant).toBe('primary')
   expect(await ui.find({ type: 'Text', text: /1 of 2$/ })).toBeDefined()
 
-  // A pick becomes the preference and survives a trip through main.
+  // A pick becomes the preference and survives a trip through main, which now shows its history.
   await ui.press({ key: 'range-all' })
   expect(await ui.find({ type: 'Text', text: /1 of 5$/ })).toBeDefined()
   await pickFrom(ui, 'worktree', '/repo')
+  expect(await ui.find({ type: 'Text', text: /1 of 3$/ })).toBeDefined()
   await pickFrom(ui, 'worktree', '/repo-side')
   expect((await ui.find({ key: 'range-all' }))?.props.variant).toBe('primary')
   expect(await ui.find({ type: 'Text', text: /1 of 5$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('main shows the welcome screen; Show all commits reveals its history', async ($, on) => {
+  const world = scenario()
+  world.originHead = 'origin/main'
+  engine(on, world)
+  const { ui } = await openPane($, 'terminal')
+  expect(await ui.find({ type: 'Text', text: /You're on main\. Work happens on branches/ })).toBeDefined()
+  expect(await ui.find({ key: 'commit-toggle' })).toBeUndefined()
+  expect((await ui.find({ key: 'range-notInDefault' }))?.props.variant).toBe('primary')
+
+  await ui.press({ key: 'show-all' })
+  expect(await current(ui, 'commit')).toMatch(/ccccccc {2}Change b/)
+  expect((await ui.find({ key: 'range-all' }))?.props.variant).toBe('primary')
+
+  await ui.press({ key: 'range-notInDefault' })
+  expect(await ui.find({ type: 'Text', text: /You're on main/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a branch level with main waits on the welcome screen, then follows its first commit', async ($, on) => {
+  const world = scenario()
+  world.originHead = 'origin/main'
+  world.ahead = { '/repo-side': { 'origin/main': 0 } }
+  engine(on, world)
+  const { ui } = await openPane($, 'terminal')
+  await pickFrom(ui, 'worktree', '/repo-side')
+  expect(await ui.find({ type: 'Text', text: /No commits on side beyond origin\/main yet\./ })).toBeDefined()
+  expect(await ui.find({ key: 'show-all' })).toBeDefined()
+
+  world.ahead['/repo-side']!['origin/main'] = 1
+  await ui.press({ key: 'refresh' })
+  expect(await current(ui, 'commit')).toMatch(/ddddddd {2}Side work/)
   await ui.unmount()
 })
