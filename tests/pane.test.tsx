@@ -150,12 +150,6 @@ async function pickFrom(ui: Drawing & { press: (t: { key: string }) => Promise<u
   await ui.press({ key: `${which}:${key}` })
 }
 
-/** The welcome Raster the pane drew, by its size, or null where it drew the one-line mark. */
-async function rasterOf(ui: { drawn: () => Promise<unknown> }) {
-  const raster = JSON.stringify(await ui.drawn()).match(/"type":"Raster","props":\{"key":"welcome-art","columns":(\d+),"rows":(\d+)/)
-  return raster ? `${raster[1]}×${raster[2]}` : null
-}
-
 async function openPane($: any, surface: 'terminal' | 'desktop' | 'mobile', cwd = '/repo') {
   await $.session.start({ cwd, surface, isInteractive: true })
   const answer = await $.command.run({ command: 'commit-walk', args: '', origin: { kind: 'user' }, presentation: {} })
@@ -329,7 +323,7 @@ test('a worktree with no commits shows the welcome art and waits', async ($, on)
   engine(on, world)
   const { ui } = await openPane($, 'terminal')
   expect(await ui.find({ type: 'Text', text: /No commits on main yet/ })).toBeDefined()
-  expect(await rasterOf(ui)).toBe('80×34')
+  expect(await ui.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
   expect(await ui.find({ key: 'worktree-toggle' })).toBeDefined()
   world.logs['/repo'] = scenario().logs['/repo']!
   await ui.press({ key: 'refresh' })
@@ -348,39 +342,38 @@ test('a narrow pane draws the one-line mark instead of the art', async ($, on) =
   await ui.unmount()
 })
 
-test('the welcome art is the raster logo sized to the pane; the one-line mark inline, small or off the terminal', async ($, on) => {
+test('the welcome art is sized to the pane: large, medium, small, or a one-line mark', async ($, on) => {
   const world = scenario()
   engine(on, world, '/nowhere')
   await $.session.start({ cwd: '/nowhere', surface: 'terminal', isInteractive: true } as never)
   await $.command.run({ command: 'commit-walk', args: '', origin: { kind: 'user' }, presentation: {} } as never)
-  const mountAt = (bodyColumns: number, bodyRows: number, placement: 'dock' | 'inline' = 'dock', surface: 'terminal' | 'desktop' = 'terminal') =>
-    $.ui.mount({ plugin: 'commit-walk', surface, ...PANE, props: { ...PANE.props, bodyColumns, placement, scroll: { offset: 0, bodyRows } } } as never)
+  const mountAt = (bodyColumns: number, bodyRows: number) =>
+    $.ui.mount({ plugin: 'commit-walk', surface: 'terminal', ...PANE, props: { ...PANE.props, bodyColumns, scroll: { offset: 0, bodyRows } } })
 
-  for (const [columns, rows, expected] of [
-    [84, 60, '80×34'],
-    [84, 40, '60×25'],
-    [70, 31, '60×20'],
-    [50, 30, '40×13'],
-    [84, 20, null],
-    [38, 60, null],
-  ] as const) {
-    const ui = await mountAt(columns, rows)
-    expect(await rasterOf(ui)).toBe(expected)
-    if (expected === null) expect(await ui.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
-    await ui.unmount()
+  // The welcome block is the first child of the pane: a Box of art rows, or one Text for the mark.
+  const welcomeOf = async (ui: { drawn: () => Promise<unknown> }) => {
+    const tree = (await ui.drawn()) as { children: { type: string; children?: unknown[] }[] }
+    return tree.children[0]!
   }
 
-  // At the bottom, inline above the prompt: the mark, however much room.
-  const inline = await mountAt(120, 60, 'inline')
-  expect(await rasterOf(inline)).toBeNull()
-  expect(await inline.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
-  await inline.unmount()
+  const large = await mountAt(84, 60)
+  const big = await welcomeOf(large)
+  expect(big.type).toBe('Box')
+  expect(big.children?.length).toBe(36 + 3)
+  await large.unmount()
 
-  // The desktop has no Raster: the mark.
-  const desktop = await mountAt(120, 60, 'dock', 'desktop')
-  expect(await rasterOf(desktop)).toBeNull()
-  expect(await desktop.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
-  await desktop.unmount()
+  const medium = await mountAt(84, 40)
+  expect((await welcomeOf(medium)).children?.length).toBe(22 + 3)
+  await medium.unmount()
+
+  const small = await mountAt(84, 25)
+  expect((await welcomeOf(small)).children?.length).toBe(12 + 2)
+  await small.unmount()
+
+  const mark = await mountAt(30, 60)
+  expect((await welcomeOf(mark)).type).toBe('Text')
+  expect(await mark.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
+  await mark.unmount()
 })
 
 test('the file list: a row press selects that file, short lists have no scroll column', async ($, on) => {
@@ -426,7 +419,7 @@ test('the debug section names a failing git command and its error', async ($, on
   const { ui } = await openPane($, 'terminal', '/nowhere')
   await ui.press({ key: 'debug' })
   expect(await ui.find({ type: 'Text', text: /128 +\d+ms {2}rev-parse --show-toplevel {2}· fatal: not a git repository/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /welcome art: raster 80×34/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /welcome art: (large|medium|small)/ })).toBeDefined()
   await ui.unmount()
 })
 

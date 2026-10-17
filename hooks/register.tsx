@@ -12,8 +12,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { About, ChangedFile, Commit, Content, Expandable, GitTrace, RangeMode, Ranges, Selection, Snapshot, ViewMode, Worktree } from '../types'
 import { createRepo, type GitRun, type Repo } from './git'
-import { FLOWER_40, FLOWER_60, LOGO_60, LOGO_80, type RasterArt } from './raster-art'
-import { COLOR } from './welcome'
+import { COMMIT_LINE, DIM_TONES, LARGE, MEDIUM, SMALL, TONE_COLOR, artRuns, type Art } from './welcome'
 import { scrollStart, type ListScroll } from './window'
 
 const PANE = 'commit-walk'
@@ -341,7 +340,23 @@ export const register: Register = on => {
     const where = isDebug ? await read($, about) : null
     const width = Math.max(24, e.props.bodyColumns)
 
+    // The sunflower over a commit line, centred: the largest that fits the pane
+    // with room for the message under it, else a one-line mark.
     const rows = e.props.scroll.bodyRows
+    const centred = (source: Art, row: number, key: string) => (
+      <Text key={key} wrap="truncate-end">
+        {' '.repeat(Math.max(0, Math.floor((width - source.width) / 2)))}
+        {artRuns(source, row).map((run, i) =>
+          run.tone === null ? (
+            run.text
+          ) : (
+            <Text key={`r${i}`} color={TONE_COLOR[run.tone]} dimColor={DIM_TONES.has(run.tone)}>
+              {run.text}
+            </Text>
+          ),
+        )}
+      </Text>
+    )
     let artTier: string | null = null
 
     // What the debug section shows: where the pane runs, what it holds, the
@@ -378,37 +393,27 @@ export const register: Register = on => {
       )
     }
 
-    // The welcome art: the logo as a Raster, two pixels a cell, the largest
-    // that fits with room for the message under it, centred. The one-line mark
-    // where there is no room, where the pane sits inline above the prompt, and
-    // on surfaces without a Raster (desktop, VS Code, mobile).
-    const mark = (
-      <Text bold color={COLOR.leaf}>
-        <Text color={COLOR.petal}>✿</Text> Commit Walk
-      </Text>
-    )
     const welcome = () => {
-      const Raster = e.surface === 'terminal' && 'Raster' in table ? table.Raster : null
-      const fits = (art: RasterArt) => width >= art.columns && rows >= art.rows + 10
-      const art = Raster && e.props.placement === 'dock' ? [LOGO_80, LOGO_60, FLOWER_60, FLOWER_40].find(fits) : undefined
-      if (!Raster || !art) {
-        artTier = 'one-line mark'
-        return mark
+      const fits = (art: Art, roomBelow: number) => width >= art.width + 2 && rows >= art.rows.length + roomBelow
+      const source = fits(LARGE, 10) ? LARGE : fits(MEDIUM, 10) ? MEDIUM : width >= SMALL.width + 2 ? SMALL : null
+      artTier = source === LARGE ? 'large' : source === MEDIUM ? 'medium' : source === SMALL ? 'small' : 'one-line mark'
+      if (source === null) {
+        return (
+          <Text bold color={TONE_COLOR.leaf}>
+            <Text color={TONE_COLOR.petal}>✿</Text> Commit Walk
+          </Text>
+        )
       }
-      artTier = `raster ${art.columns}×${art.rows}`
-      const hasTitle = art === LOGO_80 || art === LOGO_60
       const title = 'Commit Walk'
       return (
         <Box flexDirection="column">
-          <Box paddingLeft={Math.max(0, Math.floor((width - art.columns) / 2))}>
-            <Raster key="welcome-art" columns={art.columns} rows={art.rows} cells={art.cells} />
-          </Box>
-          {hasTitle ? null : (
-            <Text bold color={COLOR.leaf}>
-              {' '.repeat(Math.max(0, Math.floor((width - title.length) / 2)))}
-              {title}
-            </Text>
-          )}
+          {source.rows.map((_, row) => centred(source, row, `art-${row}`))}
+          {source === SMALL ? null : centred(COMMIT_LINE, 0, 'art-line')}
+          <Text> </Text>
+          <Text bold color={TONE_COLOR.leaf}>
+            {' '.repeat(Math.max(0, Math.floor((width - title.length) / 2)))}
+            {title}
+          </Text>
         </Box>
       )
     }
@@ -519,7 +524,7 @@ export const register: Register = on => {
           // which holds one string: Claude Code before 2.1.300 refuses a
           // Button with element children.
           <Box key={`${spec.prefix}-row:${spec.keyOf(item)}`} flexDirection="row">
-            <Text color={isSelected ? COLOR.petal : undefined} bold={isSelected}>{isSelected ? '▶ ' : '  '}</Text>
+            <Text color={isSelected ? TONE_COLOR.petal : undefined} bold={isSelected}>{isSelected ? '▶ ' : '  '}</Text>
             {tag ? <Text color={tag.color}>{tag.text}  </Text> : null}
             <Button key={`${spec.prefix}:${spec.keyOf(item)}`} plain onPress={() => spec.onPick(item)}>
               {pad(clip(full, room - used - 1), room - used)}
@@ -588,7 +593,7 @@ export const register: Register = on => {
       <Box flexDirection="column">
         <Box flexDirection="row" gap={1}>
           <Text bold>
-            <Text color={COLOR.petal}>✿</Text> {clip(baseName(snap.repoRoot), width - 16)}
+            <Text color={TONE_COLOR.petal}>✿</Text> {clip(baseName(snap.repoRoot), width - 16)}
           </Text>
           <Button key="refresh" hotkey="r" onPress={() => void load($, 'repo')}>Refresh</Button>
           {debugButton}
