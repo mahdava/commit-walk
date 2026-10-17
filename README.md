@@ -150,6 +150,11 @@ From the top down:
      from, for stacked branches. Offered when that base is not the default
      branch itself.
 
+   **not in** is chosen by default. Where a worktree does not offer it, on
+   the default branch itself for example, the list shows all commits, and
+   the next worktree that offers it opens on it again. A range you pick
+   becomes the choice and follows you across worktrees the same way.
+
    The default branch is whatever `origin/HEAD` points at, `master`
    included. Without `origin/HEAD` it is local `main`, local `master`,
    `origin/main` or `origin/master`, in that order. The base branch is the
@@ -256,7 +261,8 @@ per row in `hooks/welcome.ts`, one letter per character.
 ## How it behaves
 
 - **It starts where you are.** The pane opens on the worktree that holds the
-  session's folder, at its newest commit and first changed file.
+  session's folder, at its newest commit not yet in the default branch, and
+  its first changed file.
 - **It follows new work.** While the newest commit is selected, a refresh
   moves to the new newest commit. Refreshes happen after Claude's successful
   Edit, Write, NotebookEdit and non-read-only Bash calls, and after each

@@ -29,12 +29,13 @@ const GIT_TIMEOUT_MS = 20_000
 /** Tools whose successful, non-read-only calls may have changed the repository. */
 const WRITING_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'Bash'] as const
 
-const INITIAL_SELECTION: Selection = { worktree: null, commit: null, file: null, mode: 'diff', isFollowing: true, range: 'all' }
+const INITIAL_SELECTION: Selection = { worktree: null, commit: null, file: null, mode: 'diff', isFollowing: true, range: 'notInDefault' }
 const EMPTY_SNAPSHOT: Snapshot = {
   repoRoot: null,
   worktrees: [],
   commits: [],
   ranges: { branch: null, notInDefault: null, base: null },
+  range: 'all',
   files: [],
   content: null,
   isLoading: false,
@@ -176,13 +177,15 @@ async function load($: EngineInterface, depth: Depth, change: Partial<Selection>
       file: file?.path ?? null,
       mode: want.mode,
       isFollowing: commit !== undefined && commit.sha === commits[0]?.sha,
-      range,
+      // The preference, not the fallback: a worktree without the range does not reset it.
+      range: want.range,
     }))
     await update($, snapshot, () => ({
       repoRoot,
       worktrees,
       commits,
       ranges,
+      range,
       files,
       content,
       isLoading: false,
@@ -377,6 +380,7 @@ export const register: Register = on => {
           {line(`repo ${snap.repoRoot ?? 'none'}`, 'd-repo')}
           {line(`worktree ${sel.worktree ?? '-'} · commit ${sel.commit?.slice(0, 7) ?? '-'} · file ${sel.file ?? '-'}`, 'd-sel')}
           {line(`view ${sel.mode} · ${sel.isFollowing ? 'following' : 'pinned'} · open list ${open ?? 'none'}`, 'd-view')}
+          {line(`range shown ${snap.range} · preferred ${sel.range}`, 'd-range')}
           {line(`${counts} · ${age}${snap.isLoading ? ' · loading' : ''}`, 'd-counts')}
           {snap.error ? <Text key="d-error" color="red" wrap="truncate-end">error {snap.error}</Text> : null}
           {line(gitRuns.length === 0 ? 'git: nothing run yet' : `git, last ${gitRuns.length}, newest last:`, 'd-git')}
@@ -613,8 +617,8 @@ export const register: Register = on => {
           {rangeOptions.map(option => (
             <Button
               key={`range-${option.mode}`}
-              variant={sel.range === option.mode ? 'primary' : undefined}
-              dimColor={sel.range !== option.mode}
+              variant={snap.range === option.mode ? 'primary' : undefined}
+              dimColor={snap.range !== option.mode}
               onPress={() => void load($, 'commit', { range: option.mode, commit: null, file: null })}
             >
               {option.label}

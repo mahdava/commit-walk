@@ -438,7 +438,9 @@ test('the Commits row offers what the worktree has: not in the default branch, s
   expect(await ui.find({ key: 'range-all' })).toBeUndefined()
 
   await pickFrom(ui, 'worktree', '/repo-side')
-  expect((await ui.find({ key: 'range-all' }))?.props.variant).toBe('primary')
+  // "not in the default branch" is the default where it is offered.
+  expect((await ui.find({ key: 'range-notInDefault' }))?.props.variant).toBe('primary')
+  expect((await ui.find({ key: 'range-all' }))?.props.variant).toBeUndefined()
   expect((await ui.find({ key: 'range-notInDefault' }))?.text).toBe('not in origin/main · 3')
   expect((await ui.find({ key: 'range-base' }))?.text).toBe('since feat-base · 2')
 
@@ -491,5 +493,34 @@ test('a clipped row carries a hover card with its whole line; the selected file 
 
   await ui.press({ key: 'file:src/short.ts' })
   expect(await ui.find({ type: 'Text', text: /^▶ src\/short\.ts$/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the range preference: not in default by default, all where not offered, a pick follows across worktrees', async ($, on) => {
+  const world = scenario()
+  const hex = (n: number) => n.toString(16).padStart(40, '0')
+  world.logs['/repo-side'] = Array.from({ length: 5 }, (_, i) => ({
+    sha: hex(500 - i), parents: [hex(499 - i)], subject: `Side ${5 - i}`,
+    files: [{ status: 'M', path: 'side.ts', added: 1, deleted: 0 }],
+  }))
+  world.ahead = { '/repo-side': { 'origin/main': 2 } }
+  engine(on, world)
+  const { ui } = await openPane($, 'terminal')
+  // On main the preference is not on offer: all three commits show.
+  expect(await ui.find({ key: 'range-all' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /1 of 3$/ })).toBeDefined()
+
+  // The fallback on main did not reset it: the feature worktree opens on "not in".
+  await pickFrom(ui, 'worktree', '/repo-side')
+  expect((await ui.find({ key: 'range-notInDefault' }))?.props.variant).toBe('primary')
+  expect(await ui.find({ type: 'Text', text: /1 of 2$/ })).toBeDefined()
+
+  // A pick becomes the preference and survives a trip through main.
+  await ui.press({ key: 'range-all' })
+  expect(await ui.find({ type: 'Text', text: /1 of 5$/ })).toBeDefined()
+  await pickFrom(ui, 'worktree', '/repo')
+  await pickFrom(ui, 'worktree', '/repo-side')
+  expect((await ui.find({ key: 'range-all' }))?.props.variant).toBe('primary')
+  expect(await ui.find({ type: 'Text', text: /1 of 5$/ })).toBeDefined()
   await ui.unmount()
 })

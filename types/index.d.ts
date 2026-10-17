@@ -63,7 +63,11 @@ export type Selection = {
   mode: ViewMode
   /** True while the newest commit is selected: a refresh then moves to the new newest. */
   isFollowing: boolean
-  /** Which commits the list starts from; falls back to all where the worktree offers no such range. */
+  /**
+   * Which commits the person wants the list to start from: "not in default"
+   * until they pick another. A worktree that does not offer it shows all
+   * commits instead (Snapshot.range), and the preference is kept for the next.
+   */
   range: RangeMode
 }
 
@@ -94,6 +98,8 @@ export type Snapshot = {
   commits: Commit[]
   /** The ranges the selected worktree offers. */
   ranges: Ranges
+  /** The range the list shows: the preferred one, or all where the worktree does not offer it. */
+  range: RangeMode
   files: ChangedFile[]
   content: Content | null
   isLoading: boolean
