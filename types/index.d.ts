@@ -42,6 +42,19 @@ export type Content =
   | { kind: 'file'; source: string; isTruncated: boolean; path: string }
   | { kind: 'note'; text: string }
 
+/** Which commits the list starts from. */
+export type RangeMode = 'all' | 'notInDefault' | 'base'
+
+/** A narrower range: commits of HEAD not reachable from `ref`. */
+export type Range = { ref: string; count: number }
+
+/** The ranges a worktree offers besides its whole history. */
+export type Ranges = {
+  branch: string | null
+  notInDefault: Range | null
+  base: Range | null
+}
+
 /** Where the person is: chosen by identity, so a refresh keeps the place. */
 export type Selection = {
   worktree: string | null
@@ -50,6 +63,8 @@ export type Selection = {
   mode: ViewMode
   /** True while the newest commit is selected: a refresh then moves to the new newest. */
   isFollowing: boolean
+  /** Which commits the list starts from; falls back to all where the worktree offers no such range. */
+  range: RangeMode
 }
 
 /** The lists that fold open under their row. */
@@ -77,6 +92,8 @@ export type Snapshot = {
   repoRoot: string | null
   worktrees: Worktree[]
   commits: Commit[]
+  /** The ranges the selected worktree offers. */
+  ranges: Ranges
   files: ChangedFile[]
   content: Content | null
   isLoading: boolean
@@ -97,6 +114,8 @@ declare module 'claude-code' {
       /** The last git commands, oldest first. */
       trace: GitTrace[]
       about: About
+      /** Where a list is scrolled to, by list: the index of its first drawn row. */
+      scroll: Record<string, { start: number; anchor: string | null }>
     }
   }
 }

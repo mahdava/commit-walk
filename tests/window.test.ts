@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { windowAround } from '../hooks/window'
+import { scrollStart, windowAround } from '../hooks/window'
 
 const list = (n: number) => Array.from({ length: n }, (_, i) => `item-${i}`)
 
@@ -19,4 +19,14 @@ test('a long list is a window plus the two edge rows, around the selection', asy
   }
   expect(windowAround(list(100), 0, 10).before).toBe(0)
   expect(windowAround(list(100), 99, 10).after).toBe(0)
+})
+
+test('a scrolled list holds until the selection changes', async () => {
+  expect(scrollStart(5, 3, 8, undefined, 'a')).toBe(0)
+  expect(scrollStart(40, 20, 8, undefined, 'x')).toBe(16)
+  expect(scrollStart(40, 20, 8, { start: 30, anchor: 'x' }, 'x')).toBe(30)
+  expect(scrollStart(40, 20, 8, { start: 99, anchor: 'x' }, 'x')).toBe(32)
+  expect(scrollStart(40, 21, 8, { start: 30, anchor: 'x' }, 'y')).toBe(17)
+  expect(scrollStart(40, 33, 8, { start: 30, anchor: 'x' }, 'y')).toBe(30)
+  expect(scrollStart(40, 0, 8, { start: -5, anchor: 'a' }, 'a')).toBe(0)
 })

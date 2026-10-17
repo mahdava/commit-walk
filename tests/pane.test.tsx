@@ -19,7 +19,20 @@ function scenario() {
     { sha: sha('a'), parents: [], subject: 'Root', files: [{ status: 'A', path: 'README.md', added: 1, deleted: 0 }] },
   ]
   const side: FakeCommit[] = [{ sha: sha('d'), parents: [sha('c')], subject: 'Side work', files: [{ status: 'M', path: 'side.ts', added: 1, deleted: 0 }] }]
-  return { logs: { '/repo': main, '/repo-side': side } as Record<string, FakeCommit[]>, runs: [] as string[] }
+  return {
+    logs: { '/repo': main, '/repo-side': side } as Record<string, FakeCommit[]>,
+    runs: [] as string[],
+    /** The branch each worktree is on. */
+    branches: { '/repo': 'main', '/repo-side': 'side' } as Record<string, string>,
+    /** origin/HEAD's target, or null for a clone without one. */
+    originHead: 'origin/main' as string | null,
+    /** The refs that exist, for `rev-parse --verify`. */
+    refs: ['refs/heads/main'] as string[],
+    /** Per worktree, `rev-list --count <ref>..HEAD` per ref: HEAD's commits the ref lacks. */
+    ahead: {} as Record<string, Record<string, number>>,
+    /** Per worktree, `for-each-ref … ahead-behind:HEAD` lines: `<branch>\t<theirs> <mine>`. */
+    distances: {} as Record<string, string>,
+  }
 }
 
 type World = ReturnType<typeof scenario>
@@ -31,11 +44,27 @@ function fakeGit(world: World, cwd: string, args: readonly string[]) {
   const commitOf = (s: string | undefined) => all.find(c => c.sha === s)
   switch (args[0]) {
     case 'rev-parse':
-      return cwd === '/nowhere' ? { exitCode: 128, stdout: '', stderr: 'fatal: not a git repository (or any of the parent directories): .git' } : ok('/repo\n')
+      if (cwd === '/nowhere') return { exitCode: 128, stdout: '', stderr: 'fatal: not a git repository (or any of the parent directories): .git' }
+      if (args[1] === '--verify') return world.refs.includes(args[args.length - 1] ?? '') ? ok(`${sha('c')}\n`) : { exitCode: 1, stdout: '', stderr: '' }
+      return ok('/repo\n')
+    case 'branch':
+      return ok(`${world.branches[cwd] ?? ''}\n`)
+    case 'symbolic-ref':
+      return world.originHead ? ok(`${world.originHead}\n`) : { exitCode: 1, stdout: '', stderr: '' }
+    case 'rev-list': {
+      const ref = (args[args.length - 1] ?? '').replace(/\.\.HEAD$/, '')
+      return ok(`${world.ahead[cwd]?.[ref] ?? 0}\n`)
+    }
+    case 'for-each-ref':
+      return ok(world.distances[cwd] ?? '')
     case 'worktree':
       return ok([`worktree /repo`, `HEAD ${sha('c')}`, `branch refs/heads/main`, ``, `worktree /repo-side`, `HEAD ${sha('d')}`, `branch refs/heads/side`, ``].join('\0'))
-    case 'log':
-      return ok((world.logs[cwd] ?? []).map(c => [c.sha, c.sha.slice(0, 7), c.parents.join(' '), 'Lucia', '1 hour ago', c.subject].join('\x1f')).join('\0'))
+    case 'log': {
+      // `<ref>..HEAD` lists HEAD's newest commits the ref lacks.
+      const since = args.find(arg => arg.endsWith('..HEAD'))?.replace(/\.\.HEAD$/, '')
+      const commits = (world.logs[cwd] ?? []).slice(0, since === undefined ? undefined : (world.ahead[cwd]?.[since] ?? 0))
+      return ok(commits.map(c => [c.sha, c.sha.slice(0, 7), c.parents.join(' '), 'Lucia', '1 hour ago', c.subject].join('\x1f')).join('\0'))
+    }
     case 'hash-object':
       return ok(`${EMPTY_TREE}\n`)
     case 'diff-tree': {
@@ -246,7 +275,7 @@ test('an edit by Claude refreshes the open pane; a read-only command does not', 
   await ui.unmount()
 })
 
-test('long lists show eight rows at a time and page with their edge rows', async ($, on) => {
+test('long lists show eight rows with a scroll column, and the selection stays put while scrolling', async ($, on) => {
   const world = scenario()
   const hex = (n: number) => n.toString(16).padStart(40, '0')
   const files = Array.from({ length: 400 }, (_, i) => ({ status: 'M', path: `src/file-${i}.ts`, added: 1, deleted: 1 }))
@@ -259,19 +288,30 @@ test('long lists show eight rows at a time and page with their edge rows', async
   engine(on, world)
   const { ui } = await openPane($, 'terminal')
   expect((await rowsOf(ui, 'file')).length).toBe(8)
-  expect((await ui.find({ key: 'file-after' }))?.text).toMatch(/↓ 392 more files/)
-  expect(await rowsOf(ui, 'commit')).toEqual([])
+  expect(await ui.find({ type: 'Text', text: /1–8 of 400 files · ▲ ▼ scroll/ })).toBeDefined()
+
+  await ui.press({ key: 'file-down' })
+  expect(await ui.find({ type: 'Text', text: /8–15 of 400 files/ })).toBeDefined()
+  expect(await selectedFile(ui)).toBeUndefined()
+  expect(await rowsOf(ui, 'file').then(rows => rows[0]?.key)).toBe('file:src/file-7.ts')
+  await ui.press({ key: 'file:src/file-10.ts' })
+  expect(await selectedFile(ui)).toBe('src/file-10.ts')
+  expect(await ui.find({ type: 'Text', text: /8–15 of 400 files/ })).toBeDefined()
+  await ui.press({ key: 'file-up' })
+  await ui.press({ key: 'file-up' })
+  expect(await ui.find({ type: 'Text', text: /1–8 of 400 files/ })).toBeDefined()
+
+  // A selection moved out of view brings the list back around it.
+  for (let i = 0; i < 8; i++) await ui.press({ key: 'next-file' })
+  expect(await selectedFile(ui)).toBe('src/file-18.ts')
+  expect(await ui.find({ type: 'Text', text: /15–22 of 400 files/ })).toBeDefined()
 
   await ui.press({ key: 'commit-toggle' })
   expect((await rowsOf(ui, 'commit')).length).toBe(8)
-  expect((await ui.find({ key: 'commit-after' }))?.text).toMatch(/↓ 92 older commits/)
-  await ui.press({ key: 'commit-after' })
-  expect(await current(ui, 'commit')).toMatch(/Commit 92/)
-  expect(await rowsOf(ui, 'commit')).toEqual([])
-
-  await ui.press({ key: 'commit-toggle' })
-  expect((await ui.find({ key: 'commit-before' }))?.text).toMatch(/↑ \d+ newer commits/)
-  await ui.press({ key: 'commit-toggle' })
+  expect(await ui.find({ type: 'Text', text: /1–8 of 100 commits/ })).toBeDefined()
+  await ui.press({ key: 'commit-down' })
+  await ui.press({ key: 'commit:' + hex(1000 - 9) })
+  expect(await current(ui, 'commit')).toMatch(/Commit 91/)
   expect(await rowsOf(ui, 'commit')).toEqual([])
   await ui.unmount()
 })
@@ -335,22 +375,21 @@ test('the welcome art is sized to the pane: large, medium, small, or a one-line 
   await mark.unmount()
 })
 
-test('the file list: a row press selects that file, the edge rows page', async ($, on) => {
+test('the file list: a row press selects that file, short lists have no scroll column', async ($, on) => {
   const world = scenario()
   const files = Array.from({ length: 20 }, (_, i) => ({ status: 'M', path: `src/f${String(i).padStart(2, '0')}.ts`, added: 1, deleted: 0 }))
   world.logs['/repo']![0]!.files = files
   engine(on, world)
   const { ui } = await openPane($, 'terminal')
   expect(await selectedFile(ui)).toBe('src/f00.ts')
-  expect(await ui.find({ key: 'file-before' })).toBeUndefined()
-
   await ui.press({ key: 'file:src/f05.ts' })
   expect(await selectedFile(ui)).toBe('src/f05.ts')
+  expect(await ui.find({ key: 'file-down' })).toBeDefined()
 
-  await ui.press({ key: 'file-after' })
-  expect(await selectedFile(ui)).toBe('src/f09.ts')
-  expect((await ui.find({ key: 'file-before' }))?.text).toMatch(/↑ \d+ earlier files/)
-  expect((await rowsOf(ui, 'file')).length).toBe(8)
+  world.logs['/repo']![0]!.files = files.slice(0, 5)
+  await ui.press({ key: 'refresh' })
+  expect((await rowsOf(ui, 'file')).length).toBe(5)
+  expect(await ui.find({ key: 'file-down' })).toBeUndefined()
   await ui.unmount()
 })
 
@@ -366,7 +405,7 @@ test('the debug section shows the pane, the selection and the last git commands'
   expect(await ui.find({ type: 'Text', text: /^pane 84×80 dock/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /commit ccccccc · file src\/b\.ts/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /3 commits · 2 files/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /0 +\d+ms {2}rev-parse --show-toplevel/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /0 +\d+ms {2}log -z --max-count=100/ })).toBeDefined()
 
   await ui.press({ key: 'debug' })
   expect(await ui.find({ type: 'Text', text: /^Debug$/ })).toBeUndefined()
@@ -380,5 +419,52 @@ test('the debug section names a failing git command and its error', async ($, on
   await ui.press({ key: 'debug' })
   expect(await ui.find({ type: 'Text', text: /128 +\d+ms {2}rev-parse --show-toplevel {2}· fatal: not a git repository/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /welcome art: (large|medium|small)/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the Commits row offers what the worktree has: not in the default branch, since its base', async ($, on) => {
+  const world = scenario()
+  const hex = (n: number) => n.toString(16).padStart(40, '0')
+  world.logs['/repo-side'] = Array.from({ length: 5 }, (_, i) => ({
+    sha: hex(500 - i), parents: [hex(499 - i)], subject: `Side ${5 - i}`,
+    files: [{ status: 'M', path: 'side.ts', added: 1, deleted: 0 }],
+  }))
+  world.ahead = { '/repo-side': { 'origin/main': 3, 'feat-base': 2 } }
+  world.distances = { '/repo-side': 'main\t4 3\nside\t0 0\nfeat-base\t1 2\nchild\t2 0\nfar\t9 4\n' }
+  engine(on, world)
+  const { ui } = await openPane($, 'terminal')
+  // On main itself there is nothing to narrow to: the row is hidden.
+  expect(await ui.find({ key: 'range-all' })).toBeUndefined()
+
+  await pickFrom(ui, 'worktree', '/repo-side')
+  expect((await ui.find({ key: 'range-all' }))?.props.variant).toBe('primary')
+  expect((await ui.find({ key: 'range-notInDefault' }))?.text).toBe('not in origin/main · 3')
+  expect((await ui.find({ key: 'range-base' }))?.text).toBe('since feat-base · 2')
+
+  await ui.press({ key: 'range-base' })
+  expect((await ui.find({ key: 'range-base' }))?.props.variant).toBe('primary')
+  await ui.press({ key: 'commit-toggle' })
+  expect((await rowsOf(ui, 'commit')).map(row => row.text?.trim().slice(9))).toEqual(['Side 5', 'Side 4'])
+  await ui.press({ key: 'commit-toggle' })
+
+  await ui.press({ key: 'range-notInDefault' })
+  await ui.press({ key: 'commit-toggle' })
+  expect((await rowsOf(ui, 'commit')).length).toBe(3)
+  await ui.unmount()
+})
+
+test('a repository whose default branch is master, with no origin/HEAD', async ($, on) => {
+  const world = scenario()
+  world.originHead = null
+  world.refs = ['refs/heads/master']
+  world.branches['/repo-side'] = 'side'
+  world.ahead = { '/repo-side': { master: 1 } }
+  world.distances = { '/repo-side': 'master\t2 1\nside\t0 0\n' }
+  engine(on, world)
+  const { ui } = await openPane($, 'terminal')
+  await pickFrom(ui, 'worktree', '/repo-side')
+  expect((await ui.find({ key: 'range-notInDefault' }))?.text).toBe('not in master · 1')
+  // master is both the default and the nearest branch: no separate base option.
+  expect(await ui.find({ key: 'range-base' })).toBeUndefined()
   await ui.unmount()
 })

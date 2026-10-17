@@ -2,7 +2,7 @@
 // their output. No engine calls here: `createRepo` takes the runner, so the
 // tests drive it with canned git output.
 
-import type { ChangedFile, Commit, Content, FileStatus, Worktree } from '../types'
+import type { ChangedFile, Commit, Content, FileStatus, Ranges, Worktree } from '../types'
 
 /** What one git run answers (the shape of `$.process.run`'s result). */
 export type GitRun = { exitCode: number; stdout: string; stderr: string; isStdoutTruncated?: boolean }
@@ -242,8 +242,60 @@ export function createRepo(run: GitRunner) {
       return parseWorktrees((await git(root, ['worktree', 'list', '--porcelain', '-z'])).stdout)
     },
 
-    async log(cwd: string): Promise<Commit[]> {
-      const args = ['log', '-z', `--max-count=${MAX_COMMITS}`, `--format=${LOG_FORMAT}`, 'HEAD', '--']
+    /**
+     * The ranges a worktree can start its commit list from: the default branch
+     * (origin's HEAD, else main or master, local before origin's) and the base branch, the
+     * nearest other local branch HEAD grew from. Each with the number of
+     * HEAD's commits it does not have; null where there is none.
+     */
+    async ranges(cwd: string): Promise<Ranges> {
+      const branch = (await run(cwd, ['branch', '--show-current'])).stdout.trim() || null
+      const exists = async (ref: string) => (await run(cwd, ['rev-parse', '--verify', '--quiet', ref])).exitCode === 0
+      let defaultRef: string | null = null
+      const originHead = await run(cwd, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'])
+      if (originHead.exitCode === 0 && originHead.stdout.trim() !== '') defaultRef = originHead.stdout.trim()
+      else {
+        // No origin/HEAD (a clone that never set it): main or master, local before remote.
+        for (const [ref, name] of [['refs/heads/main', 'main'], ['refs/heads/master', 'master'], ['refs/remotes/origin/main', 'origin/main'], ['refs/remotes/origin/master', 'origin/master']] as const) {
+          if (await exists(ref)) {
+            defaultRef = name
+            break
+          }
+        }
+      }
+
+      const countSince = async (ref: string) => {
+        const counted = await run(cwd, ['rev-list', '--count', `${ref}..HEAD`])
+        return counted.exitCode === 0 ? Number(counted.stdout.trim()) : null
+      }
+      const defaultAhead = defaultRef ? await countSince(defaultRef) : null
+      const defaultName = defaultRef?.replace(/^origin\//, '') ?? null
+      // On the default branch itself, or level with it, there is nothing to narrow to.
+      const notInDefault = defaultRef && defaultAhead && branch !== defaultName ? { ref: defaultRef, count: defaultAhead } : null
+
+      // One command for every branch's distance (git 2.41+); older git offers no base.
+      const listed = await run(cwd, ['for-each-ref', '--format=%(refname:short)%09%(ahead-behind:HEAD)', 'refs/heads'])
+      let base: { ref: string; count: number } | null = null
+      if (listed.exitCode === 0) {
+        let best: { ref: string; mine: number; theirs: number } | null = null
+        for (const line of listed.stdout.split('\n')) {
+          const [ref = '', counts = ''] = line.split('\t')
+          const [theirs, mine] = counts.split(' ').map(Number)
+          // `mine`: HEAD's commits the branch lacks. 0 means it already holds HEAD (this branch, or one built on it).
+          if (ref === '' || ref === branch || mine === undefined || theirs === undefined || !(mine > 0)) continue
+          if (!best || mine < best.mine || (mine === best.mine && theirs < best.theirs)) best = { ref, mine, theirs }
+        }
+        // A base that is the default branch, or as far back as it, adds nothing to "not in default".
+        if (best && best.ref !== defaultName && (defaultAhead === null || best.mine < defaultAhead)) {
+          base = { ref: best.ref, count: best.mine }
+        }
+      }
+      return { branch, notInDefault, base }
+    },
+
+    /** The commits of HEAD, newest first; with `since`, only those not reachable from it (`since..HEAD`). */
+    async log(cwd: string, since: string | null = null): Promise<Commit[]> {
+      const args = ['log', '-z', `--max-count=${MAX_COMMITS}`, `--format=${LOG_FORMAT}`, since ? `${since}..HEAD` : 'HEAD', '--']
       const result = await run(cwd, args)
       // A branch with no commits yet has nothing to list; anything else is an error.
       if (result.exitCode !== 0 && /does not have any commits|unknown revision/.test(result.stderr)) return []

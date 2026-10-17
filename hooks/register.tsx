@@ -10,10 +10,10 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { About, ChangedFile, Commit, Content, Expandable, GitTrace, Selection, Snapshot, ViewMode, Worktree } from '../types'
+import type { About, ChangedFile, Commit, Content, Expandable, GitTrace, RangeMode, Ranges, Selection, Snapshot, ViewMode, Worktree } from '../types'
 import { createRepo, type GitRun, type Repo } from './git'
 import { COMMIT_LINE, DIM_TONES, LARGE, MEDIUM, SMALL, TONE_COLOR, artRuns, type Art } from './welcome'
-import { windowAround } from './window'
+import { scrollStart, type ListScroll } from './window'
 
 const PANE = 'commit-walk'
 const TITLE = 'Commit walk'
@@ -29,11 +29,12 @@ const GIT_TIMEOUT_MS = 20_000
 /** Tools whose successful, non-read-only calls may have changed the repository. */
 const WRITING_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'Bash'] as const
 
-const INITIAL_SELECTION: Selection = { worktree: null, commit: null, file: null, mode: 'diff', isFollowing: true }
+const INITIAL_SELECTION: Selection = { worktree: null, commit: null, file: null, mode: 'diff', isFollowing: true, range: 'all' }
 const EMPTY_SNAPSHOT: Snapshot = {
   repoRoot: null,
   worktrees: [],
   commits: [],
+  ranges: { branch: null, notInDefault: null, base: null },
   files: [],
   content: null,
   isLoading: false,
@@ -44,6 +45,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
 const selection = atom({ plugin: 'commit-walk', key: 'selection' } as const, INITIAL_SELECTION)
 const snapshot = atom({ plugin: 'commit-walk', key: 'snapshot' } as const, EMPTY_SNAPSHOT)
 const expanded = atom({ plugin: 'commit-walk', key: 'expanded' } as const, null as Expandable | null)
+const scroll = atom({ plugin: 'commit-walk', key: 'scroll' } as const, {} as Record<string, ListScroll>)
 const debugOn = atom({ plugin: 'commit-walk', key: 'debug' } as const, false)
 const trace = atom({ plugin: 'commit-walk', key: 'trace' } as const, [] as GitTrace[])
 const about = atom({ plugin: 'commit-walk', key: 'about' } as const, { pluginVersion: null, engineVersion: null, cwd: '' } as About)
@@ -129,7 +131,7 @@ async function load($: EngineInterface, depth: Depth, change: Partial<Selection>
   await update($, snapshot, snap => ({ ...snap, isLoading: true }))
 
   // Kept outside the try: a failure part way keeps what did load and says what failed.
-  let { repoRoot, worktrees, commits, files } = before
+  let { repoRoot, worktrees, commits, ranges, files } = before
   try {
     const repo = repoFor($)
 
@@ -141,8 +143,14 @@ async function load($: EngineInterface, depth: Depth, change: Partial<Selection>
     if (!worktree) throw new Error('No worktree to show.')
     const isNewWorktree = worktree.path !== was.worktree
 
+    const isNewRange = want.range !== was.range
     if (depth === 'repo' || repoRoot !== before.repoRoot || isNewWorktree) {
-      commits = await repo.log(worktree.path)
+      ranges = await repo.ranges(worktree.path)
+    }
+    // A range the worktree does not offer reads as its whole history.
+    const range: RangeMode = rangeRef(ranges, want.range) === null ? 'all' : want.range
+    if (depth === 'repo' || repoRoot !== before.repoRoot || isNewWorktree || isNewRange) {
+      commits = await repo.log(worktree.path, rangeRef(ranges, range))
     }
     // An explicit pick wins; otherwise keep the commit, or follow the newest.
     const keepCommit = 'commit' in change ? want.commit : isNewWorktree || was.isFollowing ? null : was.commit
@@ -168,11 +176,13 @@ async function load($: EngineInterface, depth: Depth, change: Partial<Selection>
       file: file?.path ?? null,
       mode: want.mode,
       isFollowing: commit !== undefined && commit.sha === commits[0]?.sha,
+      range,
     }))
     await update($, snapshot, () => ({
       repoRoot,
       worktrees,
       commits,
+      ranges,
       files,
       content,
       isLoading: false,
@@ -181,9 +191,16 @@ async function load($: EngineInterface, depth: Depth, change: Partial<Selection>
     }))
   } catch (cause) {
     if (ticket !== generation) return
-    const reached = { repoRoot, worktrees, commits }
+    const reached = { repoRoot, worktrees, commits, ranges }
     await update($, snapshot, snap => ({ ...snap, ...reached, isLoading: false, error: messageOf(cause) }))
   }
+}
+
+/** The ref a range starts after, or null for the whole history or a range the worktree does not offer. */
+function rangeRef(ranges: Ranges, mode: RangeMode): string | null {
+  if (mode === 'notInDefault') return ranges.notInDefault?.ref ?? null
+  if (mode === 'base') return ranges.base?.ref ?? null
+  return null
 }
 
 async function isPaneOpen($: EngineInterface): Promise<boolean> {
@@ -315,6 +332,7 @@ export const register: Register = on => {
     const snap = await read($, snapshot)
     const open = await read($, expanded)
     const isDebug = await read($, debugOn)
+    const scrolled = await read($, scroll)
     const gitRuns = isDebug ? await read($, trace) : []
     const where = isDebug ? await read($, about) : null
     const width = Math.max(24, e.props.bodyColumns)
@@ -445,9 +463,10 @@ export const register: Register = on => {
     const pad = (text: string, room = inner) => text.padEnd(room).slice(0, room)
 
     /**
-     * Rows of a list around the selected entry, LIST_ROWS at a time, with an
-     * edge row at either end that pages. Each row: a ▶ on the selected one, an
-     * optional coloured tag, the entry's text.
+     * The rows of a list, LIST_ROWS at a time. Each row: a ▶ on the selected
+     * one, an optional coloured tag, the entry's text as a whole-row button.
+     * A longer list gets a scroll column on the right: ▲ and ▼ page through it
+     * without changing the selection, and a thumb shows where the rows are.
      */
     const rowList = <T,>(spec: {
       prefix: string
@@ -456,39 +475,63 @@ export const register: Register = on => {
       keyOf: (item: T) => string
       tagOf?: (item: T) => { text: string; color: string | undefined }
       textOf: (item: T) => string
-      noun: { one: string; many: string; before: string; after: string }
+      noun: { one: string; many: string }
       onPick: (item: T) => void
     }) => {
-      const win = windowAround(spec.items, spec.at, LIST_ROWS + 2)
-      const edge = (side: 'before' | 'after', count: number, target: number) => (
-        <Button key={`${spec.prefix}-${side}`} plain dimColor onPress={() => {
-          const item = spec.items[target]
-          if (item !== undefined) spec.onPick(item)
-        }}>
-          {pad(`  ${side === 'before' ? '↑' : '↓'} ${count} ${spec.noun[side]} ${count === 1 ? spec.noun.one : spec.noun.many}`)}
-        </Button>
-      )
-      return [
-        win.before > 0 ? edge('before', win.before, win.start - 1) : null,
-        ...win.items.map((item, i) => {
-          const isSelected = win.start + i === spec.at
-          const tag = spec.tagOf?.(item)
-          const used = 2 + (tag ? tag.text.length + 2 : 0)
-          return (
-            // The marker and the coloured tag are text in front of the button,
-            // which holds one string: Claude Code before 2.1.300 refuses a
-            // Button with element children.
-            <Box key={`${spec.prefix}-row:${spec.keyOf(item)}`} flexDirection="row">
-              <Text color={isSelected ? TONE_COLOR.petal : undefined} bold={isSelected}>{isSelected ? '▶ ' : '  '}</Text>
-              {tag ? <Text color={tag.color}>{tag.text}  </Text> : null}
-              <Button key={`${spec.prefix}:${spec.keyOf(item)}`} plain onPress={() => spec.onPick(item)}>
-                {pad(clip(spec.textOf(item), inner - used - 1), inner - used)}
-              </Button>
+      const total = spec.items.length
+      const size = Math.min(LIST_ROWS, total)
+      const selectedKey = spec.items[spec.at] === undefined ? null : spec.keyOf(spec.items[spec.at] as T)
+      const start = scrollStart(total, spec.at, LIST_ROWS, scrolled[spec.prefix], selectedKey)
+      const shown = spec.items.slice(start, start + size)
+      const hasBar = total > LIST_ROWS
+      const room = hasBar ? inner - 2 : inner
+      const last = total - LIST_ROWS
+      const scrollTo = (to: number) =>
+        void update($, scroll, all => ({ ...all, [spec.prefix]: { start: Math.min(Math.max(to, 0), last), anchor: selectedKey } }))
+
+      const rows = shown.map((item, i) => {
+        const isSelected = start + i === spec.at
+        const tag = spec.tagOf?.(item)
+        const used = 2 + (tag ? tag.text.length + 2 : 0)
+        return (
+          // The marker and the coloured tag are text in front of the button,
+          // which holds one string: Claude Code before 2.1.300 refuses a
+          // Button with element children.
+          <Box key={`${spec.prefix}-row:${spec.keyOf(item)}`} flexDirection="row">
+            <Text color={isSelected ? TONE_COLOR.petal : undefined} bold={isSelected}>{isSelected ? '▶ ' : '  '}</Text>
+            {tag ? <Text color={tag.color}>{tag.text}  </Text> : null}
+            <Button key={`${spec.prefix}:${spec.keyOf(item)}`} plain onPress={() => spec.onPick(item)}>
+              {pad(clip(spec.textOf(item), room - used - 1), room - used)}
+            </Button>
+          </Box>
+        )
+      })
+      if (!hasBar) return <Box flexDirection="column">{rows}</Box>
+
+      // The scroll column: ▲, a track with the thumb, ▼; one cell per row.
+      const track = size - 2
+      const thumb = Math.max(1, Math.round((track * size) / total))
+      const thumbAt = last === 0 ? 0 : Math.round(((track - thumb) * start) / last)
+      const atTop = start === 0
+      const atEnd = start >= last
+      return (
+        <Box flexDirection="column">
+          <Box flexDirection="row">
+            <Box flexDirection="column">{rows}</Box>
+            <Text> </Text>
+            <Box flexDirection="column">
+              <Button key={`${spec.prefix}-up`} plain dimColor={atTop} onPress={() => scrollTo(start - (LIST_ROWS - 1))}>▲</Button>
+              {Array.from({ length: track }, (_, i) => (
+                <Text key={`${spec.prefix}-track-${i}`} dimColor={i < thumbAt || i >= thumbAt + thumb}>
+                  {i >= thumbAt && i < thumbAt + thumb ? '┃' : '│'}
+                </Text>
+              ))}
+              <Button key={`${spec.prefix}-down`} plain dimColor={atEnd} onPress={() => scrollTo(start + (LIST_ROWS - 1))}>▼</Button>
             </Box>
-          )
-        }),
-        win.after > 0 ? edge('after', win.after, win.start + win.items.length) : null,
-      ]
+          </Box>
+          <Text dimColor wrap="truncate-end">{`  ${start + 1}–${start + size} of ${total} ${spec.noun.many} · ▲ ▼ scroll`}</Text>
+        </Box>
+      )
     }
 
     /**
@@ -530,6 +573,30 @@ export const register: Register = on => {
       </Box>
     )
 
+    // Which commits the list starts from: every option the worktree offers, one
+    // button each, the chosen one primary. Hidden where only the whole history is on offer.
+    const rangeOptions: { mode: RangeMode; label: string }[] = [
+      { mode: 'all', label: 'all' },
+      ...(snap.ranges.notInDefault ? [{ mode: 'notInDefault' as const, label: `not in ${snap.ranges.notInDefault.ref} · ${snap.ranges.notInDefault.count}` }] : []),
+      ...(snap.ranges.base ? [{ mode: 'base' as const, label: `since ${snap.ranges.base.ref} · ${snap.ranges.base.count}` }] : []),
+    ]
+    const rangeRow =
+      rangeOptions.length < 2 ? null : (
+        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+          <Text dimColor>Commits  </Text>
+          {rangeOptions.map(option => (
+            <Button
+              key={`range-${option.mode}`}
+              variant={sel.range === option.mode ? 'primary' : undefined}
+              dimColor={sel.range !== option.mode}
+              onPress={() => void load($, 'commit', { range: option.mode, commit: null, file: null })}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </Box>
+      )
+
     const worktreeAt = snap.worktrees.findIndex(wt => wt.path === worktree?.path)
     const worktreePicker = foldable({
       which: 'worktree',
@@ -540,7 +607,7 @@ export const register: Register = on => {
       at: worktreeAt,
       keyOf: wt => wt.path,
       textOf: worktreeLabel,
-      noun: { one: 'worktree', many: 'worktrees', before: 'more', after: 'more' },
+      noun: { one: 'worktree', many: 'worktrees' },
       onPick: wt => void load($, 'repo', { worktree: wt.path, commit: null, file: null }),
     })
 
@@ -567,6 +634,7 @@ export const register: Register = on => {
         {worktreePicker}
 
         <Box flexDirection="column">
+          {rangeRow}
           {foldable({
             which: 'commit',
             prefix: 'commit',
@@ -576,7 +644,7 @@ export const register: Register = on => {
             at: commitAt,
             keyOf: one => one.sha,
             textOf: commitLabel,
-            noun: { one: 'commit', many: 'commits', before: 'newer', after: 'older' },
+            noun: { one: 'commit', many: 'commits' },
             onPick: one => void load($, 'commit', { commit: one.sha, file: null }),
           })}
           {commit ? (
@@ -611,7 +679,7 @@ export const register: Register = on => {
                 const name = one.oldPath && one.oldPath !== one.path ? `${one.oldPath} → ${one.path}` : one.path
                 return `${name}  ${one.isBinary ? 'binary' : `+${one.added} −${one.deleted}`}`
               },
-              noun: { one: 'file', many: 'files', before: 'earlier', after: 'more' },
+              noun: { one: 'file', many: 'files' },
               onPick: one => void load($, 'content', { file: one.path }),
             })}
           </Box>

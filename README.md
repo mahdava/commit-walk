@@ -53,7 +53,7 @@ tool, writes nothing to the repository and makes no network requests.
 | What | Version |
 | --- | --- |
 | Claude Code | 2.1.292 or later, for the mods API. Tested on 2.1.292 and 2.1.302. |
-| Git | 2.36 or later, for NUL-separated `git worktree list` output |
+| Git | 2.36 or later, for NUL-separated `git worktree list` output. 2.41 or later for the base-branch range |
 
 It draws the same on the terminal, the desktop app, VS Code and the mobile
 app: every control is a button.
@@ -141,19 +141,41 @@ From the top down:
    row to unfold the list of every worktree under it. Click the row again,
    or pick one, to fold it. Locked worktrees are marked. Bare and prunable
    ones are left out.
-3. **Commit**, a framed row that unfolds the same way, listing the newest
-   100 commits of that worktree's HEAD by short SHA and subject. Under it are
+3. **Commits**, a row of buttons choosing which commits the list starts
+   from, shown only when the worktree offers more than its whole history:
+   - **all**: the whole history.
+   - **not in origin/main · 12**: the commits the default branch does not
+     have yet. Offered off the default branch.
+   - **since feat/base · 3**: the commits since the branch this one grew
+     from, for stacked branches. Offered when that base is not the default
+     branch itself.
+
+   The default branch is whatever `origin/HEAD` points at, `master`
+   included. Without `origin/HEAD` it is local `main`, local `master`,
+   `origin/main` or `origin/master`, in that order. The base branch is the
+   nearest other local branch: the one missing the fewest of this branch's
+   commits.
+4. **Commit**, a framed row that unfolds the same way, listing the newest
+   100 commits of the chosen range by short SHA and subject. Under it are
    the author, the relative date, whether it is a merge or the root commit,
    and its position, then the Older and Newer buttons.
-4. **Files**, always unfolded: the files the commit changed, with their
+5. **Files**, always unfolded: the files the commit changed, with their
    status letter in colour and their line counts. Renames show as
    `old → new`, and binary files say "binary". Prev and Next sit above it.
 
-Every list is a frame of whole-row buttons, so a click anywhere on a row
-picks it, and the row under the pointer is highlighted. The selected row is
-marked ▶. A list shows 8 rows around the selection. Rows at either end such
-as "↑ 12 newer commits" and "↓ 84 older commits" step past the edge.
-5. **The view**, one of three:
+Every list is a frame of whole-row buttons, so a click on a row picks it,
+and the row under the pointer is highlighted. The selected row is marked ▶.
+A list shows 8 rows. A longer one gets a scroll column on its right:
+
+- **▲ and ▼** page through the list 7 rows at a time without changing the
+  selection.
+- **The thumb** in between shows where the visible rows are.
+- **A line under the list** reads "9–16 of 40 files".
+
+A scrolled list stays where you put it. It comes back around the selection
+only when the selection moves out of view, for example with `j` or `k`.
+
+6. **The view**, one of three:
 
 | View | Shows |
 | --- | --- |
@@ -255,7 +277,7 @@ per row in `hooks/welcome.ts`, one letter per character.
 | What | Limit | Past it |
 | --- | --- | --- |
 | Commits listed | 100 newest | Older commits are not reachable from the pane |
-| Rows in one list | 8 at a time | Its "↑" and "↓" rows page through the rest |
+| Rows in one list | 8 at a time | ▲ and ▼ in its scroll column page through the rest |
 | Text in the view | 60,000 characters | Cut on a line or hunk boundary, with a note |
 | File size for After and Before | 4 MB | A note instead of the file |
 | One git command | 20 s | That step fails and shows the error |

@@ -24,3 +24,23 @@ export function windowAround<T>(items: readonly T[], at: number, max: number): L
   const end = start + size
   return { items: items.slice(start, end), start, before: start, after: items.length - end }
 }
+
+/** Where a list was scrolled to, and which entry was selected then. */
+export type ListScroll = { start: number; anchor: string | null }
+
+/**
+ * The first row a list of `length` entries draws, `size` rows at a time. A
+ * scroll the person made holds while the selection is the one it was made
+ * with, or while a new selection is in view; a selection out of view brings
+ * the list back around it.
+ */
+export function scrollStart(length: number, at: number, size: number, scrolled: ListScroll | undefined, selected: string | null): number {
+  if (length <= size) return 0
+  const last = length - size
+  const clamp = (n: number) => Math.min(Math.max(n, 0), last)
+  const centred = clamp(Math.max(at, 0) - Math.floor(size / 2))
+  if (scrolled === undefined) return centred
+  const start = clamp(scrolled.start)
+  if (scrolled.anchor === selected) return start
+  return at >= start && at < start + size ? start : centred
+}
