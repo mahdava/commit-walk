@@ -12,7 +12,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { ChangedFile, Commit, Content, Selection, Snapshot, ViewMode, Worktree } from '../types'
 import { createRepo, type GitRun, type Repo } from './git'
-import { ART, ART_WIDTH, DIM_TONES, TONE_COLOR, artRuns } from './welcome'
+import { COMMIT_LINE, DIM_TONES, LARGE, MEDIUM, SMALL, TONE_COLOR, artRuns, type Art } from './welcome'
 import { AFTER_VALUE, BEFORE_VALUE, pickedIndex, windowAround } from './window'
 
 const PANE = 'commit-walk'
@@ -274,33 +274,38 @@ export const register: Register = on => {
     const snap = await read($, snapshot)
     const width = Math.max(24, e.props.bodyColumns)
 
-    // The sunflower over a commit line, centred; one line where the pane is too narrow for it.
+    // The sunflower over a commit line, centred: the largest that fits the pane
+    // with room for the message under it, else a one-line mark.
+    const rows = e.props.scroll.bodyRows
+    const centred = (source: Art, row: number, key: string) => (
+      <Text key={key} wrap="truncate-end">
+        {' '.repeat(Math.max(0, Math.floor((width - source.width) / 2)))}
+        {artRuns(source, row).map((run, i) =>
+          run.tone === null ? (
+            run.text
+          ) : (
+            <Text key={`r${i}`} color={TONE_COLOR[run.tone]} dimColor={DIM_TONES.has(run.tone)}>
+              {run.text}
+            </Text>
+          ),
+        )}
+      </Text>
+    )
     const welcome = () => {
-      if (width < ART_WIDTH + 2) {
+      const fits = (art: Art, roomBelow: number) => width >= art.width + 2 && rows >= art.rows.length + roomBelow
+      const source = fits(LARGE, 10) ? LARGE : fits(MEDIUM, 10) ? MEDIUM : width >= SMALL.width + 2 ? SMALL : null
+      if (source === null) {
         return (
           <Text bold color={TONE_COLOR.leaf}>
             <Text color={TONE_COLOR.petal}>✿</Text> Commit Walk
           </Text>
         )
       }
-      const pad = ' '.repeat(Math.max(0, Math.floor((width - ART_WIDTH) / 2)))
       const title = 'Commit Walk'
       return (
         <Box flexDirection="column">
-          {ART.map((_, row) => (
-            <Text key={`art-${row}`} wrap="truncate-end">
-              {pad}
-              {artRuns(row).map((run, i) =>
-                run.tone === null ? (
-                  run.text
-                ) : (
-                  <Text key={`r${i}`} color={TONE_COLOR[run.tone]} dimColor={DIM_TONES.has(run.tone)}>
-                    {run.text}
-                  </Text>
-                ),
-              )}
-            </Text>
-          ))}
+          {source.rows.map((_, row) => centred(source, row, `art-${row}`))}
+          {source === SMALL ? null : centred(COMMIT_LINE, 0, 'art-line')}
           <Text> </Text>
           <Text bold color={TONE_COLOR.leaf}>
             {' '.repeat(Math.max(0, Math.floor((width - title.length) / 2)))}

@@ -255,3 +255,37 @@ test('a narrow pane draws the one-line mark instead of the art', async ($, on) =
   expect(await ui.find({ key: 'art-0' })).toBeUndefined()
   await ui.unmount()
 })
+
+test('the welcome art is sized to the pane: large, medium, small, or a one-line mark', async ($, on) => {
+  const world = scenario()
+  engine(on, world, '/nowhere')
+  await $.session.start({ cwd: '/nowhere', surface: 'terminal', isInteractive: true } as never)
+  await $.command.run({ command: 'commits', args: '', origin: { kind: 'user' }, presentation: {} } as never)
+  const mountAt = (bodyColumns: number, bodyRows: number) =>
+    $.ui.mount({ plugin: 'commit-walk', surface: 'terminal', ...PANE, props: { ...PANE.props, bodyColumns, scroll: { offset: 0, bodyRows } } })
+
+  // The welcome block is the first child of the pane: a Box of art rows, or one Text for the mark.
+  const welcomeOf = async (ui: { drawn: () => Promise<unknown> }) => {
+    const tree = (await ui.drawn()) as { children: { type: string; children?: unknown[] }[] }
+    return tree.children[0]!
+  }
+
+  const large = await mountAt(84, 60)
+  const big = await welcomeOf(large)
+  expect(big.type).toBe('Box')
+  expect(big.children?.length).toBe(36 + 3)
+  await large.unmount()
+
+  const medium = await mountAt(84, 40)
+  expect((await welcomeOf(medium)).children?.length).toBe(22 + 3)
+  await medium.unmount()
+
+  const small = await mountAt(84, 25)
+  expect((await welcomeOf(small)).children?.length).toBe(12 + 2)
+  await small.unmount()
+
+  const mark = await mountAt(30, 60)
+  expect((await welcomeOf(mark)).type).toBe('Text')
+  expect(await mark.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
+  await mark.unmount()
+})

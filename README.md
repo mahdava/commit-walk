@@ -173,26 +173,50 @@ The sunflower from the logo walks a commit line whenever there is nothing to
 walk yet:
 
 ```
-            \   \ | /   /
-         '.  .-'''''''-.  .'
-      --   /  ●       ●  \   --
-     ~~~  |       ◡       |  ~~~
-      --   \             /   --
-         .'  '-._____.-'  '.
-       ,-.  /    | |    \  ,-.
-      (__/       | |       \__)
-                /   \
-            ___/     \___   ))
-           (____)   (____)
-  ●━━━━━━━━━━━●━━━━━━━━━━━●━━━━━━━━━━━●
+                       .--
+             -+----  .-...--
+             +.....-++.....+. .---.
+       .-----#......-+.....++-....+
+       -......+-.....+--...+......+  .+.
+       --......-+-++++++++#-.....-- .-  .-.
+       -++---..-#-----------+-..++--   --
+    -+-......-++----------++-+#-....--
+    --........#----++-----##--#.....--
+    .-+.......#----##+---+++--#-..-+.
+++++-+++#++++-#-----+++++#+---#--++++++++-.
+++-------#+....#+-----++++---#-....++----++
+ +++++++#+......+#+-------++#-.....-#+--++
+  -+++++#-.....-+..-++++++-..-+----+++++.
+    .----+-----#......--......# .-----.
+               #-.....++-.....+
+             -###+..--   .-++#.    ...  .- .
+          .++###  ..        +##+---.  -. +.--
+        .-..+---            .+.+---.-++.   -
+       .-----+--..           #----+#+-
+        ..-..-. .-           .--+#-.
+           ....---             .
+    ●━━━━━━━━━━━●━━━━━━━━━━━●━━━━━━━━━━━●
 
-                Commit Walk
+                 Commit Walk
 ```
 
 It shows while the repository is first read, outside a repository, and on a
 worktree with no commits yet. On a new worktree the pane waits there and
-moves to the first commit as soon as it lands. The art is drawn in the
-logo's colours. A pane narrower than the art shows a one-line ✿ mark.
+moves to the first commit as soon as it lands.
+
+The art is drawn in the logo's colours: yellow petals with orange outlines,
+a brown face, green leaves and sneakers. The pane picks the largest version
+that fits with room for the message under it:
+
+| Version | Size | Shown when the pane has |
+| --- | --- | --- |
+| Large sunflower | 71 × 36 | 73 columns and 46 rows |
+| Sunflower, above | 45 × 22 | 47 columns and 32 rows |
+| Small sunflower | 39 × 12 | 41 columns |
+| One-line ✿ mark | 1 row | Less than that |
+
+The two larger sunflowers are Lucia's drawings. The colours come from a mask
+per row in `hooks/welcome.ts`, one letter per character.
 
 ## How it behaves
 
