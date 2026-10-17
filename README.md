@@ -52,7 +52,7 @@ tool, writes nothing to the repository and makes no network requests.
 
 | What | Version |
 | --- | --- |
-| Claude Code | 2.1.300 or later, for the mods API. Tested on 2.1.300 to 2.1.302. |
+| Claude Code | 2.1.292 or later, for the mods API. Tested on 2.1.292 and 2.1.302. |
 | Git | 2.36 or later, for NUL-separated `git worktree list` output |
 
 It draws the same on the terminal, the desktop app, VS Code and the mobile
@@ -106,6 +106,7 @@ Start Claude Code inside a Git repository, then run `/commit-walk`.
 | `/commit-walk` | Opens the pane, or closes it when it is open |
 | `/commit-walk refresh` | Opens the pane if needed and reads the repository again |
 | `/commit-walk close` | Closes the pane |
+| `/commit-walk debug` | Shows or hides the debug section, opening the pane if needed |
 
 `/commit-walk` runs at once, even in the middle of a turn. Before 1.3.0 the
 command was `/commits`.
@@ -125,6 +126,7 @@ keyboard:
 | `k` / `j` | Previous / next file |
 | `d` / `a` / `b` | Diff / After / Before |
 | `r` | Refresh |
+| `x` | Shows or hides the debug section |
 | `Esc` | Closes the pane |
 
 ## What the pane shows
@@ -281,7 +283,29 @@ git's index lock from an agent that is committing. Output is read
 NUL-separated, so paths with spaces, quotes or non-ASCII characters come
 through as they are. Claude Code runs git with repository hooks turned off.
 
+### The debug section
+
+`/commit-walk debug`, the `x` key or the Debug button shows a framed section
+under the header:
+
+- **Versions:** the plugin's and Claude Code's, and the surface.
+- **The pane:** its size and placement, and which welcome art it chose.
+- **Paths:** the session's folder and the repository.
+- **The selection:** worktree, commit, file, view, following or pinned, and
+  which list is open.
+- **What loaded:** the counts, how long ago, and the last error.
+- **The last 10 git commands:** exit code and time taken. A failing command
+  is red and shows the first line of git's error.
+
+It cannot help when Claude Code refuses the whole drawing, because then
+nothing of the plugin is drawn. The debug log covers that case, as below.
+
 ## Troubleshooting
+
+**On a Mac with Homebrew.** The `claude-code` cask follows Claude Code's
+stable channel, about a week behind the latest. commit-walk works from
+2.1.292, the stable version when 1.5.0 came out. For the newest Claude Code,
+install the `claude-code@latest` cask instead.
 
 **`/commit-walk` does not exist.** The plugin is not loaded in this session. Run
 `/reload-plugins`, or start a new session. `claude plugin list` should show
@@ -296,7 +320,9 @@ window.
 
 **The pane is empty, or closed right after opening.** Claude Code refused
 to draw it. Versions before 1.1.0 did this on any branch with more than 64
-commits, because a picker may hold at most 64 options. Update the plugin.
+commits, because a picker may hold at most 64 options. Version 1.4.0 did it
+on Claude Code before 2.1.300, which refuses a button holding coloured text.
+Update the plugin.
 Otherwise, Claude Code refused the drawing for another reason.
 Start Claude Code with `--debug` and look for a line containing
 `ui.render (Pane)` and `does not validate`. It names the reason.

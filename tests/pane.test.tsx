@@ -90,9 +90,23 @@ async function rowsOf(ui: Drawing, prefix: string) {
   return (await ui.findAll({ type: 'Button' })).filter((row: { key?: string }) => row.key?.startsWith(`${prefix}:`))
 }
 
-/** The file the list marks as selected: the `file:` row drawn with ▶. */
-async function selectedFile(ui: Drawing) {
-  return (await rowsOf(ui, 'file')).find(row => row.text?.startsWith('▶'))?.key?.slice('file:'.length)
+type Node = { type?: string; props?: { key?: string }; children?: unknown[] }
+
+/** The file the list marks as selected: the row whose ▶ marker stands before its `file:` button. */
+async function selectedFile(ui: Drawing & { drawn: () => Promise<unknown> }) {
+  const walk = (node: unknown): string | undefined => {
+    if (typeof node !== 'object' || node === null) return undefined
+    const kids = ((node as Node).children ?? []) as Node[]
+    const marker = kids[0]
+    const button = kids.find(kid => kid?.type === 'Button' && kid.props?.key?.startsWith('file:'))
+    if (marker?.type === 'Text' && JSON.stringify(marker).includes('▶') && button) return button.props!.key!.slice('file:'.length)
+    for (const kid of kids) {
+      const found = walk(kid)
+      if (found) return found
+    }
+    return undefined
+  }
+  return walk(await ui.drawn())
 }
 
 /** What a folded list's row shows as its current entry. */
@@ -192,9 +206,9 @@ test('mobile draws the same foldable lists and steps', async ($, on) => {
   engine(on, world)
   const { ui } = await openPane($, 'mobile')
   expect(await ui.find({ key: 'commit-toggle' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /Change b/ })).toBeDefined()
+  expect(await current(ui, 'commit')).toMatch(/Change b/)
   await ui.press({ key: 'older' })
-  expect(await ui.find({ type: 'Text', text: /Add b/ })).toBeDefined()
+  expect(await current(ui, 'commit')).toMatch(/Add b/)
   await ui.unmount()
 })
 
@@ -207,7 +221,7 @@ test('/commit-walk closes an open pane and explains unknown arguments', async ($
   expect(closed.text).toBe('Commit walk closed.')
   expect(fake.panes.length).toBe(0)
   const odd = await $.command.run({ command: 'commit-walk', args: 'sideways', origin: { kind: 'user' }, presentation: {} } as never)
-  expect(odd.text).toBe('Usage: /commit-walk [refresh|close]')
+  expect(odd.text).toBe('Usage: /commit-walk [refresh|close|debug]')
 })
 
 test('an edit by Claude refreshes the open pane; a read-only command does not', async ($, on) => {
@@ -337,5 +351,34 @@ test('the file list: a row press selects that file, the edge rows page', async (
   expect(await selectedFile(ui)).toBe('src/f09.ts')
   expect((await ui.find({ key: 'file-before' }))?.text).toMatch(/↑ \d+ earlier files/)
   expect((await rowsOf(ui, 'file')).length).toBe(8)
+  await ui.unmount()
+})
+
+test('the debug section shows the pane, the selection and the last git commands', async ($, on) => {
+  const world = scenario()
+  engine(on, world)
+  const { ui } = await openPane($, 'terminal')
+  expect(await ui.find({ type: 'Text', text: /^Debug$/ })).toBeUndefined()
+
+  const answer = await $.command.run({ command: 'commit-walk', args: 'debug', origin: { kind: 'user' }, presentation: {} } as never)
+  expect(answer.text).toBe('Commit walk debug section shown.')
+  expect(await ui.find({ type: 'Text', text: /^Debug$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^pane 84×80 dock/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /commit ccccccc · file src\/b\.ts/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /3 commits · 2 files/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /0 +\d+ms {2}rev-parse --show-toplevel/ })).toBeDefined()
+
+  await ui.press({ key: 'debug' })
+  expect(await ui.find({ type: 'Text', text: /^Debug$/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the debug section names a failing git command and its error', async ($, on) => {
+  const world = scenario()
+  engine(on, world, '/nowhere')
+  const { ui } = await openPane($, 'terminal', '/nowhere')
+  await ui.press({ key: 'debug' })
+  expect(await ui.find({ type: 'Text', text: /128 +\d+ms {2}rev-parse --show-toplevel {2}· fatal: not a git repository/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /welcome art: (large|medium|small)/ })).toBeDefined()
   await ui.unmount()
 })

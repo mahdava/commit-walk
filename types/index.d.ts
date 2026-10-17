@@ -55,6 +55,23 @@ export type Selection = {
 /** The lists that fold open under their row. */
 export type Expandable = 'worktree' | 'commit'
 
+/** One git command the pane ran, for the debug section. */
+export type GitTrace = {
+  args: string
+  cwd: string
+  exitCode: number
+  ms: number
+  /** The first line of stderr when the command failed. */
+  error: string | null
+}
+
+/** What the debug section says about where the pane runs. */
+export type About = {
+  pluginVersion: string | null
+  engineVersion: string | null
+  cwd: string
+}
+
 /** Everything loaded for the current selection. */
 export type Snapshot = {
   repoRoot: string | null
@@ -75,6 +92,11 @@ declare module 'claude-code' {
       snapshot: Snapshot
       /** Which list is unfolded below its row, if any. */
       expanded: Expandable | null
+      /** Whether the debug section is shown. */
+      debug: boolean
+      /** The last git commands, oldest first. */
+      trace: GitTrace[]
+      about: About
     }
   }
 }

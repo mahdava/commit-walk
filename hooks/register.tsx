@@ -10,7 +10,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { ChangedFile, Commit, Content, Expandable, Selection, Snapshot, ViewMode, Worktree } from '../types'
+import type { About, ChangedFile, Commit, Content, Expandable, GitTrace, Selection, Snapshot, ViewMode, Worktree } from '../types'
 import { createRepo, type GitRun, type Repo } from './git'
 import { COMMIT_LINE, DIM_TONES, LARGE, MEDIUM, SMALL, TONE_COLOR, artRuns, type Art } from './welcome'
 import { windowAround } from './window'
@@ -44,6 +44,11 @@ const EMPTY_SNAPSHOT: Snapshot = {
 const selection = atom({ plugin: 'commit-walk', key: 'selection' } as const, INITIAL_SELECTION)
 const snapshot = atom({ plugin: 'commit-walk', key: 'snapshot' } as const, EMPTY_SNAPSHOT)
 const expanded = atom({ plugin: 'commit-walk', key: 'expanded' } as const, null as Expandable | null)
+const debugOn = atom({ plugin: 'commit-walk', key: 'debug' } as const, false)
+const trace = atom({ plugin: 'commit-walk', key: 'trace' } as const, [] as GitTrace[])
+const about = atom({ plugin: 'commit-walk', key: 'about' } as const, { pluginVersion: null, engineVersion: null, cwd: '' } as About)
+/** Git commands the debug section keeps. */
+const TRACE_LENGTH = 10
 
 /** The session's working directory: where the repository is looked for. */
 let sessionCwd = ''
@@ -55,14 +60,42 @@ let refreshTimer: { cancel(): void } | null = null
 
 function repoFor($: EngineInterface): Repo {
   return createRepo(async (cwd, args): Promise<GitRun> => {
+    const started = Date.now()
     // No optional locks: reading must never contend with an agent's index writes.
     const result = await $.process.run(['git', '-c', 'core.quotepath=off', '--no-pager', ...args], {
       cwd,
       timeoutMs: GIT_TIMEOUT_MS,
       env: { GIT_OPTIONAL_LOCKS: '0', GIT_PAGER: 'cat', LC_ALL: 'C' },
     })
+    const entry: GitTrace = {
+      args: args.join(' '),
+      cwd,
+      exitCode: result.exitCode,
+      ms: Date.now() - started,
+      error: result.exitCode === 0 ? null : result.stderr.trim().split('\n')[0] ?? '',
+    }
+    await update($, trace, list => [...list, entry].slice(-TRACE_LENGTH))
     return result
   })
+}
+
+/** The plugin's version from its manifest and the engine's, for the debug section; null where unknown. */
+async function aboutHere($: EngineInterface, cwd: string): Promise<About> {
+  let pluginVersion: string | null = null
+  let engineVersion: string | null = null
+  try {
+    const manifest = JSON.parse(await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`)) as { version?: unknown }
+    pluginVersion = typeof manifest.version === 'string' ? manifest.version : null
+  } catch {
+    pluginVersion = null
+  }
+  try {
+    // Absent before Claude Code 2.1.300: the call rejects there and the version reads unknown.
+    engineVersion = (await $.session.version()).version
+  } catch {
+    engineVersion = null
+  }
+  return { pluginVersion, engineVersion, cwd }
 }
 
 function messageOf(cause: unknown): string {
@@ -214,12 +247,14 @@ function commitLabel(commit: Commit): string {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     sessionCwd = e.cwd
+    await update($, about, () => ({ pluginVersion: null, engineVersion: null, cwd: e.cwd }))
+    void aboutHere($, e.cwd).then(found => update($, about, () => found))
     // Named after the plugin. (/review is refused: it is an alias of the built-in /code-review.)
     try {
       await $.command.register({
         name: 'commit-walk',
         description: 'Open or close the commit walk pane: worktrees, commits and files of this repository',
-        argumentHint: '[refresh|close]',
+        argumentHint: '[refresh|close|debug]',
         immediate: true,
       })
     } catch (cause) {
@@ -237,7 +272,16 @@ export const register: Register = on => {
       await $.ui.close({ id: PANE })
       return { text: 'Commit walk closed.' }
     }
-    if (arg !== '' && arg !== 'refresh') return { text: 'Usage: /commit-walk [refresh|close]' }
+    if (arg === 'debug') {
+      const isOn = !(await read($, debugOn))
+      await update($, debugOn, () => isOn)
+      if (!isOpen) {
+        await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true, columns: PANE_COLUMNS })
+        await load($, 'repo')
+      }
+      return { text: `Commit walk debug section ${isOn ? 'shown' : 'hidden'}.` }
+    }
+    if (arg !== '' && arg !== 'refresh') return { text: 'Usage: /commit-walk [refresh|close|debug]' }
 
     // Open first so the pane shows its loading line, then answer once it has loaded.
     const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true, columns: PANE_COLUMNS })
@@ -270,6 +314,9 @@ export const register: Register = on => {
     const sel = await read($, selection)
     const snap = await read($, snapshot)
     const open = await read($, expanded)
+    const isDebug = await read($, debugOn)
+    const gitRuns = isDebug ? await read($, trace) : []
+    const where = isDebug ? await read($, about) : null
     const width = Math.max(24, e.props.bodyColumns)
 
     // The sunflower over a commit line, centred: the largest that fits the pane
@@ -289,9 +336,45 @@ export const register: Register = on => {
         )}
       </Text>
     )
+    let artTier: string | null = null
+
+    // What the debug section shows: where the pane runs, what it holds, the
+    // last git commands. Drawn at the bottom of every screen while it is on.
+    const debugButton = (
+      <Button key="debug" hotkey="x" dimColor onPress={() => void update($, debugOn, now => !now)}>
+        {isDebug ? 'Hide debug' : 'Debug'}
+      </Button>
+    )
+    const debugSection = () => {
+      if (!isDebug || where === null) return null
+      const line = (text: string, key: string) => <Text key={key} dimColor wrap="truncate-end">{text}</Text>
+      const counts = `${snap.worktrees.length} worktrees · ${snap.commits.length} commits · ${snap.files.length} files`
+      const age = snap.loadedAt === null ? 'never loaded' : `loaded ${Math.round((Date.now() - snap.loadedAt) / 1000)}s ago`
+      return (
+        <Box flexDirection="column" borderStyle="single" borderDimColor>
+          <Text bold dimColor>Debug</Text>
+          {line(`commit-walk ${where.pluginVersion ?? '?'} · Claude Code ${where.engineVersion ?? 'unknown (before 2.1.300)'} · ${e.surface}`, 'd-versions')}
+          {line(`pane ${e.props.bodyColumns}×${rows} ${e.props.placement}${artTier ? ` · welcome art: ${artTier}` : ''}`, 'd-pane')}
+          {line(`cwd ${where.cwd}`, 'd-cwd')}
+          {line(`repo ${snap.repoRoot ?? 'none'}`, 'd-repo')}
+          {line(`worktree ${sel.worktree ?? '-'} · commit ${sel.commit?.slice(0, 7) ?? '-'} · file ${sel.file ?? '-'}`, 'd-sel')}
+          {line(`view ${sel.mode} · ${sel.isFollowing ? 'following' : 'pinned'} · open list ${open ?? 'none'}`, 'd-view')}
+          {line(`${counts} · ${age}${snap.isLoading ? ' · loading' : ''}`, 'd-counts')}
+          {snap.error ? <Text key="d-error" color="red" wrap="truncate-end">error {snap.error}</Text> : null}
+          {line(gitRuns.length === 0 ? 'git: nothing run yet' : `git, last ${gitRuns.length}, newest last:`, 'd-git')}
+          {gitRuns.map((run, i) => (
+            <Text key={`d-git-${i}`} color={run.exitCode === 0 ? undefined : 'red'} dimColor={run.exitCode === 0} wrap="truncate-end">
+              {`  ${String(run.exitCode).padStart(3)} ${String(run.ms).padStart(5)}ms  ${run.args}${run.error ? `  · ${run.error}` : ''}`}
+            </Text>
+          ))}
+        </Box>
+      )
+    }
+
     const welcome = () => {
       const fits = (art: Art, roomBelow: number) => width >= art.width + 2 && rows >= art.rows.length + roomBelow
       const source = fits(LARGE, 10) ? LARGE : fits(MEDIUM, 10) ? MEDIUM : width >= SMALL.width + 2 ? SMALL : null
+      artTier = source === LARGE ? 'large' : source === MEDIUM ? 'medium' : source === SMALL ? 'small' : 'one-line mark'
       if (source === null) {
         return (
           <Text bold color={TONE_COLOR.leaf}>
@@ -320,9 +403,11 @@ export const register: Register = on => {
           <Text bold>No repository to review</Text>
           <Text color="red">{snap.error}</Text>
           <Text dimColor>Start Claude Code inside a Git repository, then run /commit-walk.</Text>
-          <Box>
+          <Box flexDirection="row" gap={1}>
             <Button key="refresh" hotkey="r" onPress={() => void load($, 'repo')}>Try again</Button>
+            {debugButton}
           </Box>
+          {debugSection()}
         </Box>
       )
     }
@@ -331,6 +416,7 @@ export const register: Register = on => {
         <Box flexDirection="column" gap={1}>
           {welcome()}
           <Text dimColor>Reading the repository…</Text>
+          {debugSection()}
         </Box>
       )
     }
@@ -389,11 +475,16 @@ export const register: Register = on => {
           const tag = spec.tagOf?.(item)
           const used = 2 + (tag ? tag.text.length + 2 : 0)
           return (
-            <Button key={`${spec.prefix}:${spec.keyOf(item)}`} label={spec.keyOf(item)} plain onPress={() => spec.onPick(item)}>
+            // The marker and the coloured tag are text in front of the button,
+            // which holds one string: Claude Code before 2.1.300 refuses a
+            // Button with element children.
+            <Box key={`${spec.prefix}-row:${spec.keyOf(item)}`} flexDirection="row">
               <Text color={isSelected ? TONE_COLOR.petal : undefined} bold={isSelected}>{isSelected ? '▶ ' : '  '}</Text>
               {tag ? <Text color={tag.color}>{tag.text}  </Text> : null}
-              <Text bold={isSelected}>{pad(clip(spec.textOf(item), inner - used - 1), inner - used)}</Text>
-            </Button>
+              <Button key={`${spec.prefix}:${spec.keyOf(item)}`} plain onPress={() => spec.onPick(item)}>
+                {pad(clip(spec.textOf(item), inner - used - 1), inner - used)}
+              </Button>
+            </Box>
           )
         }),
         win.after > 0 ? edge('after', win.after, win.start + win.items.length) : null,
@@ -410,8 +501,7 @@ export const register: Register = on => {
       return (
         <Box flexDirection="column" borderStyle="round" borderDimColor>
           <Button key={`${spec.which}-toggle`} plain onPress={() => void update($, expanded, now => (now === spec.which ? null : spec.which))}>
-            <Text>{head}</Text>
-            <Text dimColor>{isOpen ? ' ▴' : ' ▾'}</Text>
+            {`${head}${isOpen ? ' ▴' : ' ▾'}`}
           </Button>
           {isOpen
             ? rowList({
@@ -433,6 +523,7 @@ export const register: Register = on => {
             <Text color={TONE_COLOR.petal}>✿</Text> {clip(baseName(snap.repoRoot), width - 16)}
           </Text>
           <Button key="refresh" hotkey="r" onPress={() => void load($, 'repo')}>Refresh</Button>
+          {debugButton}
         </Box>
         <Text dimColor wrap="truncate-end">{snap.isLoading ? 'Loading…' : sel.isFollowing ? 'Following the newest commit' : 'Pinned to a past commit'}</Text>
         {snap.error ? <Text color="red">{snap.error}</Text> : null}
@@ -459,6 +550,7 @@ export const register: Register = on => {
       return (
         <Box flexDirection="column" gap={1}>
           {header}
+          {debugSection()}
           {worktreePicker}
           {welcome()}
           <Text>No commits on {where} yet.</Text>
@@ -467,9 +559,11 @@ export const register: Register = on => {
       )
     }
 
+    // The debug section sits under the header here: below the diff it would be off screen.
     return (
       <Box flexDirection="column" gap={1}>
         {header}
+        {debugSection()}
         {worktreePicker}
 
         <Box flexDirection="column">
@@ -545,7 +639,7 @@ export const register: Register = on => {
           </Box>
         )}
 
-        <Text dimColor wrap="truncate-end">keys: o/n commit · k/j file · d/a/b view · r refresh · Esc close</Text>
+        <Text dimColor wrap="truncate-end">keys: o/n commit · k/j file · d/a/b view · r refresh · x debug · Esc close</Text>
       </Box>
     )
   })
