@@ -1,0 +1,6 @@
+{
+  "name": "commit-walk",
+  "owner": { "name": "Lucia" },
+  "description": "commit-walk: a Claude Code pane for walking a Git repository commit by commit.",
+  "plugins": [{ "name": "commit-walk", "source": "./" }]
+}

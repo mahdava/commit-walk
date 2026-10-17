@@ -1,0 +1,7 @@
+{
+  "name": "commit-walk",
+  "version": "1.0.0",
+  "author": { "name": "Lucia" },
+  "description": "Review a Git repository worktree by worktree and commit by commit in a pane: each changed file as a diff or as the whole file before and after. Read-only; everything comes from git.",
+  "types": "./types/index.d.ts"
+}
