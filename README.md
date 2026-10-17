@@ -321,6 +321,7 @@ Code's own plugin environment, with no Node APIs.
 | `.claude-plugin/plugin.json` | The manifest |
 | `.claude-plugin/marketplace.json` | Makes the repository its own marketplace |
 | `assets/logo.png` | The logo |
+| `fantasy-map-generator/` | The sunflower as maps and a palette for the ASCII Fantasy Map Builder |
 
 Checks:
 
