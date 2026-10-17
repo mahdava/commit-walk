@@ -82,7 +82,7 @@ function engine(on: any, world: World, cwd = '/repo') {
 
 async function openPane($: any, surface: 'terminal' | 'desktop' | 'mobile', cwd = '/repo') {
   await $.session.start({ cwd, surface, isInteractive: true })
-  const answer = await $.command.run({ command: 'commits', args: '', origin: { kind: 'user' }, presentation: {} })
+  const answer = await $.command.run({ command: 'commit-walk', args: '', origin: { kind: 'user' }, presentation: {} })
   const ui = await $.ui.mount({ plugin: 'commit-walk', surface, ...PANE })
   return { ui, answer }
 }
@@ -171,16 +171,16 @@ test('a surface without Select still draws and steps', async ($, on) => {
   await ui.unmount()
 })
 
-test('/commits closes an open pane and explains unknown arguments', async ($, on) => {
+test('/commit-walk closes an open pane and explains unknown arguments', async ($, on) => {
   const world = scenario()
   const fake = engine(on, world)
   await openPane($, 'terminal')
   expect(fake.panes.length).toBe(1)
-  const closed = await $.command.run({ command: 'commits', args: '', origin: { kind: 'user' }, presentation: {} } as never)
+  const closed = await $.command.run({ command: 'commit-walk', args: '', origin: { kind: 'user' }, presentation: {} } as never)
   expect(closed.text).toBe('Commit walk closed.')
   expect(fake.panes.length).toBe(0)
-  const odd = await $.command.run({ command: 'commits', args: 'sideways', origin: { kind: 'user' }, presentation: {} } as never)
-  expect(odd.text).toBe('Usage: /commits [refresh|close]')
+  const odd = await $.command.run({ command: 'commit-walk', args: 'sideways', origin: { kind: 'user' }, presentation: {} } as never)
+  expect(odd.text).toBe('Usage: /commit-walk [refresh|close]')
 })
 
 test('an edit by Claude refreshes the open pane; a read-only command does not', async ($, on) => {
@@ -249,7 +249,7 @@ test('a narrow pane draws the one-line mark instead of the art', async ($, on) =
   const world = scenario()
   engine(on, world, '/nowhere')
   await $.session.start({ cwd: '/nowhere', surface: 'terminal', isInteractive: true } as never)
-  await $.command.run({ command: 'commits', args: '', origin: { kind: 'user' }, presentation: {} } as never)
+  await $.command.run({ command: 'commit-walk', args: '', origin: { kind: 'user' }, presentation: {} } as never)
   const ui = await $.ui.mount({ plugin: 'commit-walk', surface: 'terminal', ...PANE, props: { ...PANE.props, bodyColumns: 30 } })
   expect(await ui.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
   expect(await ui.find({ key: 'art-0' })).toBeUndefined()
@@ -260,7 +260,7 @@ test('the welcome art is sized to the pane: large, medium, small, or a one-line 
   const world = scenario()
   engine(on, world, '/nowhere')
   await $.session.start({ cwd: '/nowhere', surface: 'terminal', isInteractive: true } as never)
-  await $.command.run({ command: 'commits', args: '', origin: { kind: 'user' }, presentation: {} } as never)
+  await $.command.run({ command: 'commit-walk', args: '', origin: { kind: 'user' }, presentation: {} } as never)
   const mountAt = (bodyColumns: number, bodyRows: number) =>
     $.ui.mount({ plugin: 'commit-walk', surface: 'terminal', ...PANE, props: { ...PANE.props, bodyColumns, scroll: { offset: 0, bodyRows } } })
 

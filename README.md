@@ -100,17 +100,16 @@ claude plugin uninstall commit-walk@commit-walk
 
 ## Use
 
-Start Claude Code inside a Git repository, then run `/commits`.
+Start Claude Code inside a Git repository, then run `/commit-walk`.
 
 | Command | What it does |
 | --- | --- |
-| `/commits` | Opens the pane, or closes it when it is open |
-| `/commits refresh` | Opens the pane if needed and reads the repository again |
-| `/commits close` | Closes the pane |
+| `/commit-walk` | Opens the pane, or closes it when it is open |
+| `/commit-walk refresh` | Opens the pane if needed and reads the repository again |
+| `/commit-walk close` | Closes the pane |
 
-`/commits` runs at once, even in the middle of a turn. It is not called
-`/review` because Claude Code keeps that name as an alias of its built-in
-`/code-review`.
+`/commit-walk` runs at once, even in the middle of a turn. Before 1.3.0 the
+command was `/commits`.
 
 ### Keyboard
 
@@ -279,7 +278,7 @@ through as they are. Claude Code runs git with repository hooks turned off.
 
 ## Troubleshooting
 
-**`/commits` does not exist.** The plugin is not loaded in this session. Run
+**`/commit-walk` does not exist.** The plugin is not loaded in this session. Run
 `/reload-plugins`, or start a new session. `claude plugin list` should show
 `commit-walk` as enabled.
 

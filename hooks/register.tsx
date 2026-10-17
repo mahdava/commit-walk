@@ -215,21 +215,21 @@ function fileLabel(file: ChangedFile): string {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     sessionCwd = e.cwd
-    // Registered as /commits: /review is refused, being an alias of the built-in /code-review.
+    // Named after the plugin. (/review is refused: it is an alias of the built-in /code-review.)
     try {
       await $.command.register({
-        name: 'commits',
+        name: 'commit-walk',
         description: 'Open or close the commit walk pane: worktrees, commits and files of this repository',
         argumentHint: '[refresh|close]',
         immediate: true,
       })
     } catch (cause) {
-      $.ui.log(`commit-walk: /commits is unavailable: ${messageOf(cause)}`)
+      $.ui.log(`commit-walk: /commit-walk is unavailable: ${messageOf(cause)}`)
     }
     return next(e)
   })
 
-  on('command.run', { command: 'commits' }, async ($, e) => {
+  on('command.run', { command: 'commit-walk' }, async ($, e) => {
     const arg = e.args.trim()
     const isOpen = await isPaneOpen($)
     if (arg === 'close' || (arg === '' && isOpen)) {
@@ -238,7 +238,7 @@ export const register: Register = on => {
       await $.ui.close({ id: PANE })
       return { text: 'Commit walk closed.' }
     }
-    if (arg !== '' && arg !== 'refresh') return { text: 'Usage: /commits [refresh|close]' }
+    if (arg !== '' && arg !== 'refresh') return { text: 'Usage: /commit-walk [refresh|close]' }
 
     // Open first so the pane shows its loading line, then answer once it has loaded.
     const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true, columns: PANE_COLUMNS })
@@ -321,7 +321,7 @@ export const register: Register = on => {
           {welcome()}
           <Text bold>No repository to review</Text>
           <Text color="red">{snap.error}</Text>
-          <Text dimColor>Start Claude Code inside a Git repository, then run /commits.</Text>
+          <Text dimColor>Start Claude Code inside a Git repository, then run /commit-walk.</Text>
           <Box>
             <Button key="refresh" hotkey="r" onPress={() => void load($, 'repo')}>Try again</Button>
           </Box>
