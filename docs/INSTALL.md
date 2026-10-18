@@ -1,6 +1,8 @@
-# Installing Commit Walk
+<p align="center"><a href="../README.md"><img src="../assets/commit-walk-logo-outlined.svg" alt="Commit Walk, back to the README" width="320"></a></p>
 
-## Requirements
+# <picture><img src="../assets/sunflower-emoji.svg" alt="" width="28" height="28" align="top"></picture> Installing Commit Walk
+
+## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> Requirements
 
 | What | Version |
 | --- | --- |
@@ -10,7 +12,7 @@
 It draws the same on the terminal, the desktop app, VS Code and the mobile
 app: every control is a button.
 
-## Install
+## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> Install
 
 The repository is private. Installing needs read access to it on GitHub and
 a git credential for github.com on the machine. That is an SSH key, or

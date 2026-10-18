@@ -1,6 +1,8 @@
-# Troubleshooting Commit Walk
+<p align="center"><a href="../README.md"><img src="../assets/commit-walk-logo-outlined.svg" alt="Commit Walk, back to the README" width="320"></a></p>
 
-## What it runs
+# <picture><img src="../assets/sunflower-emoji.svg" alt="" width="28" height="28" align="top"></picture> Troubleshooting Commit Walk
+
+## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> What it runs
 
 Only these git commands, through Claude Code's process runner, in the
 selected worktree:
@@ -20,7 +22,7 @@ git's index lock from an agent that is committing. Output is read
 NUL-separated, so paths with spaces, quotes or non-ASCII characters come
 through as they are. Claude Code runs git with repository hooks turned off.
 
-### The debug section
+### <picture><img src="../assets/sunflower-emoji.svg" alt="" width="20" height="20" align="top"></picture> The debug section
 
 `/commit-walk debug`, the `x` key or the Debug button shows a framed section
 under the header:
@@ -37,7 +39,7 @@ under the header:
 It cannot help when Claude Code refuses the whole drawing, because then
 nothing of the plugin is drawn. The debug log covers that case, as below.
 
-## Troubleshooting
+## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> Troubleshooting
 
 **On a Mac with Homebrew.** The `claude-code` cask follows Claude Code's
 stable channel, about a week behind the latest. commit-walk works from

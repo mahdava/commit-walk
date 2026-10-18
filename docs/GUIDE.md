@@ -1,6 +1,8 @@
-# Using Commit Walk
+<p align="center"><a href="../README.md"><img src="../assets/commit-walk-logo-outlined.svg" alt="Commit Walk, back to the README" width="320"></a></p>
 
-## Commands
+# <picture><img src="../assets/sunflower-emoji.svg" alt="" width="28" height="28" align="top"></picture> Using Commit Walk
+
+## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> Commands
 
 Start Claude Code inside a Git repository, then run `/commit-walk`.
 
@@ -14,7 +16,7 @@ Start Claude Code inside a Git repository, then run `/commit-walk`.
 `/commit-walk` runs at once, even in the middle of a turn. Before 1.3.0 the
 command was `/commits`.
 
-## What the pane shows
+## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> What the pane shows
 
 <p align="center"><img src="../assets/screenshots/diff.png" alt="The pane on a feature branch: worktree row, the not-in-main range with 4 commits, the commit 'Grade trails as easy, moderate or hard', its two files with src/index.ts selected, and the coloured diff" width="820"></p>
 
@@ -100,7 +102,7 @@ The status letters are git's own:
 | `T` | Type changed, for example a file became a symlink |
 | `U` | Unmerged |
 
-## How it behaves
+## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> How it behaves
 
 - **It starts where you are.** The pane opens on the worktree that holds the
   session's folder, at its newest commit not yet in the default branch, and
@@ -127,7 +129,7 @@ The status letters are git's own:
 - **A plugin reload keeps your place.** The selection and the loaded data
   live in the session's plugin state, which survives a hot reload.
 
-## Limits
+## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> Limits
 
 | What | Limit | Past it |
 | --- | --- | --- |

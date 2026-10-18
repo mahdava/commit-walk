@@ -1,4 +1,6 @@
-# Developing commit-walk
+<p align="center"><a href="../README.md"><img src="../assets/commit-walk-logo-outlined.svg" alt="Commit Walk, back to the README" width="320"></a></p>
+
+# <picture><img src="../assets/sunflower-emoji.svg" alt="" width="28" height="28" align="top"></picture> Developing Commit Walk
 
 The plugin is a Claude Code mod: a hooks module that runs inside Claude
 Code's own plugin environment, with no Node APIs.
