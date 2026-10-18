@@ -1,6 +1,10 @@
 // keyboard.mjs > assets/keyboard.svg: the pane's keys on a small keyboard,
 // coloured by what they do, each with a label tab pointing up at it.
 // The keys' groups, labels and colours are in keys.mjs, shared with the demo.
+// The outlined logo sits in the free corner left of the arrows, inlined so
+// it draws wherever the picture is shown as an image.
+import { readFileSync } from 'node:fs'
+
 import { GROUPS, KEYS } from './keys.mjs'
 
 const U = 64 // one key unit, in px
@@ -9,8 +13,8 @@ const LANE = 40 // under each row, for the label tabs
 const PAD = 20
 
 const C = {
-  body: '#2a1000', // the face's dark brown
-  bodyEdge: '#130500',
+  body: '#2b3542', // blue-grey
+  bodyEdge: '#1a2029',
   key: '#f8f3e6',
   keyEdge: '#d8cfb8',
   keyText: '#9b8f78',
@@ -74,6 +78,22 @@ process.stdout.write(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} 
 <desc id="d">${legend}</desc>
 <rect width="${W}" height="${H}" rx="24" fill="${C.bodyEdge}"/>
 <rect x="3" y="3" width="${W - 6}" height="${H - 9}" rx="22" fill="${C.body}"/>
+${logo()}
 ${out}
 </svg>
 `)
+
+/** The outlined logo, bottom left: under the third row, left of the arrows. */
+function logo() {
+  const source = readFileSync(new URL('../../assets/commit-walk-logo-outlined.svg', import.meta.url), 'utf8')
+  const [vw, vh] = source.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/).slice(1).map(Number)
+  const height = 84
+  const width = (height * vw) / vh
+  const x = PAD + 4
+  const y = H - PAD - height + 2
+  return source
+    .replace(/^<\?xml[^>]*>/, '')
+    .replace(/<!DOCTYPE[^>]*>/, '')
+    .replace(/ id="[^"]*"/g, '')
+    .replace(/<svg width="100%" height="100%"/, `<svg x="${x}" y="${y}" width="${width.toFixed(1)}" height="${height}" aria-hidden="true"`)
+}
