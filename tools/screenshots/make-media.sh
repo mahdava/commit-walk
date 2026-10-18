@@ -61,16 +61,12 @@ read -r c r < <(at "Record the climb"); click "$c" "$r"; shot 2.4
 read -r c r < <(at "[ all ]"); click $((c + 2)) "$r"; shot 2.2
 read -r c r < <(at "Commit    "); click $((c + 20)) "$r"; shot 3.0
 
-# The welcome screen on main, tall enough for the large sunflower.
-start 128 64 main
-$T send-keys -t s "/commit-walk"; sleep 1; $T send-keys -t s Enter; sleep 4
-$T capture-pane -eNpt s > "$OUT/welcome.ansi"
 $T kill-server
 
 cd "$OUT/frames"
 args=()
 for f in *.ansi; do args+=("$f" "${f%.ansi}.png"); done
-node "$HERE/render.mjs" "${args[@]}" ../welcome.ansi ../welcome.png
+node "$HERE/render.mjs" "${args[@]}"
 
 : > list.txt
 i=0
@@ -86,5 +82,4 @@ ffmpeg -loglevel error -y -f concat -safe 0 -i list.txt \
 mkdir -p "$ASSETS/screenshots"
 cp 08.png "$ASSETS/screenshots/diff.png"
 cp 12.png "$ASSETS/screenshots/commit-list.png"
-cp ../welcome.png "$ASSETS/screenshots/welcome.png"
 echo "Media written to $ASSETS; captures kept in $OUT. The demo repository is $DEMO."

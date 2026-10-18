@@ -28,7 +28,6 @@ tool, writes nothing to the repository and makes no network requests.
 - [What it runs](#what-it-runs)
 - [Troubleshooting](#troubleshooting)
 - [Develop](#develop)
-- [Ideas not built yet](#ideas-not-built-yet)
 
 ## Requirements
 
@@ -197,36 +196,6 @@ The status letters are git's own:
 | `T` | Type changed, for example a file became a symlink |
 | `U` | Unmerged |
 
-### The welcome screen
-
-The sunflower from the logo walks a commit line whenever there is nothing to
-walk yet:
-
-<p align="center"><img src="assets/screenshots/welcome.png" alt="The welcome screen on main: the large sunflower in yellow, brown and green walking the four-dot commit line, the title Commit Walk, and the message that work happens on branches with a Show all commits button" width="820"></p>
-
-It shows while the repository is first read, outside a repository, on a
-worktree with no commits yet, and under "not in" on the default branch or a
-branch with nothing beyond it. On a new worktree the pane waits there and
-moves to the first commit as soon as it lands.
-
-The art is drawn in the logo's colours: yellow petals with orange outlines,
-a brown face, green leaves and sneakers. The pane picks the largest version
-that fits with room for the message under it:
-
-| Version | Size | Shown when the pane has |
-| --- | --- | --- |
-| Large sunflower | 71 × 36 | 73 columns and 46 rows |
-| Medium sunflower | 45 × 22 | 47 columns and 32 rows |
-| Small sunflower | 23 × 11 | Any room: the pane is always at least 24 columns |
-
-The pane's own rows sit above the art, so the large one needs a terminal
-about 55 rows tall. The screenshot above is 128 × 64.
-
-All three sunflowers are Lucia's drawings. The two larger ones take their
-colours from a mask per row in `hooks/welcome.ts`, one letter per character.
-The small one was made in her ASCII Fantasy Map Builder and keeps its
-palette: every character has its own colour, as in the builder.
-
 ## How it behaves
 
 - **It starts where you are.** The pane opens on the worktree that holds the
@@ -340,63 +309,4 @@ newest commit is selected. Press `n` until Newer is dimmed, or press `r`.
 
 ## Develop
 
-The plugin is a Claude Code mod: a hooks module that runs inside Claude
-Code's own plugin environment, with no Node APIs.
-
-| File | Holds |
-| --- | --- |
-| `hooks/git.ts` | The git commands and NUL-safe parsers. It makes no engine calls, so tests drive it with canned output. |
-| `hooks/register.tsx` | The hooks: the command, the refresh triggers and the pane |
-| `hooks/window.ts` | The window of rows a long list shows |
-| `hooks/welcome.ts` | The welcome art, with a colour mask per row |
-| `types/index.d.ts` | The state contract: the values kept in the session's plugin state |
-| `tests/git.test.ts` | Parser and fitting tests |
-| `tests/window.test.ts` | List window tests |
-| `tests/pane.test.tsx` | Pane tests on the terminal, desktop and mobile surfaces |
-| `.claude-plugin/plugin.json` | The manifest |
-| `.claude-plugin/marketplace.json` | Makes the repository its own marketplace |
-| `assets/commit-walk-logo.svg` | The logo |
-| `assets/commit-walk-logo-outlined.svg` | The logo with a white outline, for dark backgrounds; the README shows it |
-| `assets/logo.png` | The first logo, as a PNG |
-| `assets/commit-walk-demo.gif`, `.mp4` | The demo at the top of this README |
-| `assets/screenshots/` | The README's screenshots |
-| `tools/screenshots/` | `make-media.sh` remakes the demo and screenshots from a real session in a throwaway repository; its header lists what it needs |
-
-Checks:
-
-```
-claude plugin validate .
-claude plugin test .
-```
-
-`claude plugin validate` reads the manifest, the marketplace file and the
-module, and reports anything Claude Code would refuse. `claude plugin test`
-runs the tests inside Claude Code's own plugin host.
-
-Type-checking uses the API types that Claude Code writes into
-`.claude-plugin/types/` when a session loads the plugin from a local folder,
-as with `--plugin-dir` below. That folder is git-ignored. Once it exists:
-
-```
-npx -p typescript tsc -p .
-```
-
-To work on a local copy, start a session with the folder loaded:
-
-```
-claude --plugin-dir /path/to/commit-walk
-```
-
-Edits reload when the turn that made them ends. An installed copy picks up
-changes with `/reload-plugins`.
-
-Bump `version` in `.claude-plugin/plugin.json` with each change meant to
-reach installs.
-
-## Ideas not built yet
-
-- A "Working tree" entry for uncommitted changes.
-- A small "new commit" marker while pinned to an older commit.
-- Remembering the last worktree across sessions.
-- Picking which parent a merge compares with.
-- Paging further back than 100 commits.
+The files, checks and local workflow are in [docs/DEVELOP.md](docs/DEVELOP.md).
