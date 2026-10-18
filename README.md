@@ -84,6 +84,8 @@ row, and folds again when you pick an entry.
 - [Troubleshooting](docs/TROUBLESHOOTING.md): the debug section, and fixes for common problems
 - [Develop](docs/DEVELOP.md): the files, the checks and working on a local copy
 
+Found a problem, or have an idea? [Open an issue](https://github.com/mahdava/commit-walk/issues).
+
 ## <picture><img src="assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> Credits
 
 - The logo's lettering is from the [SuperTrend](https://nhfonts.gumroad.com/l/super-trend-font) font by [NHFonts](https://nhfonts.gumroad.com/).
