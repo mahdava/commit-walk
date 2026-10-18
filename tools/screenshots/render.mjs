@@ -1,4 +1,5 @@
 // render.mjs <in.ansi> <out.png> [<in.ansi> <out.png> …]: tmux `capture-pane -eN` dumps drawn as terminal windows.
+// Outside the rounded corners is transparent, or BACKDROP (a CSS colour) for video frames.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
@@ -70,16 +71,19 @@ function line(text) {
 }
 
 const pageFor = input => {
-const rows = readFileSync(input, 'utf8').replace(/\n$/, '').split('\n').map(line)
+const text = readFileSync(input, 'utf8').replace(/\n$/, '').split('\n')
+// Every frame is the terminal's full width (COLS), so a video's frames share one size.
+const cols = Number(process.env.COLS) || Math.max(...text.map(t => [...t.replace(/\x1b\[[0-9;:]*m/g, '')].length))
+const rows = text.map(line)
 return `<!doctype html><meta charset="utf-8"><style>
 @font-face{font-family:Sym;src:url(${process.env.SYMBOL_FONT ? 'file://' + process.env.SYMBOL_FONT : 'seguisym.ttf'})}
-html,body{background:transparent}
+html,body{background:${process.env.BACKDROP ?? 'transparent'}}
 body{margin:0;display:inline-block}
 .win{border-radius:10px;overflow:hidden;background:${BG}}
 .bar{height:30px;background:#26292d;display:flex;align-items:center;padding:0 12px;gap:7px;position:relative}
 .dot{width:12px;height:12px;border-radius:50%}
 .t{position:absolute;left:0;right:0;text-align:center;color:#9a9ea3;font:12px system-ui,sans-serif}
-pre{margin:0;padding:10px 12px 12px;color:${FG};font:13px/15px "DejaVu Sans Mono",Sym,monospace;white-space:pre}
+pre{margin:0;padding:10px 12px 12px;width:${cols}ch;overflow:hidden;color:${FG};font:13px/15px "DejaVu Sans Mono",Sym,monospace;white-space:pre}
 pre div{height:15px}
 </style><div class="win"><div class="bar"><div class="dot" style="background:#ff5f57"></div><div class="dot" style="background:#febc2e"></div><div class="dot" style="background:#28c840"></div><div class="t">${esc(title)}</div></div><pre>${rows.map(r => `<div>${r}</div>`).join('')}</pre></div>`
 

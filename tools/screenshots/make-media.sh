@@ -17,6 +17,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ASSETS=$HERE/../../assets
 DEMO=${DEMO:-$HOME/code/trail-notes}
 export OUT=${OUT:-$(mktemp -d)}
+export COLS=128
 T="tmux -L cwshots"
 
 "$HERE/make-demo-repo.sh" "$DEMO"
@@ -76,7 +77,10 @@ $T kill-server
 cd "$OUT/frames"
 args=()
 for f in *.ansi; do args+=("$f" "${f%.ansi}.png"); done
-node "$HERE/render.mjs" "${args[@]}"
+# Video frames are opaque: ffmpeg's GIF path cannot carry the alpha, so the
+# corners take the window's own colour. The stills keep transparent corners.
+BACKDROP='#16181b' node "$HERE/render.mjs" "${args[@]}"
+node "$HERE/render.mjs" 08.ansi diff.png 12.ansi commit-list.png
 
 : > list.txt
 i=0
@@ -86,10 +90,9 @@ ffmpeg -loglevel error -y -f concat -safe 0 -i list.txt \
   -vf "fps=30,scale=1600:-2:flags=lanczos,format=yuv420p" -c:v libx264 -crf 20 -preset slow -movflags +faststart \
   "$ASSETS/commit-walk-demo.mp4"
 ffmpeg -loglevel error -y -f concat -safe 0 -i list.txt \
-  -vf "scale=1100:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:reserve_transparent=1[p];[b][p]paletteuse=dither=none:alpha_threshold=128" -fps_mode vfr \
+  -vf "scale=1100:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=none" -fps_mode vfr \
   "$ASSETS/commit-walk-demo.gif"
 
 mkdir -p "$ASSETS/screenshots"
-cp 08.png "$ASSETS/screenshots/diff.png"
-cp 12.png "$ASSETS/screenshots/commit-list.png"
+cp diff.png commit-list.png "$ASSETS/screenshots/"
 echo "Media written to $ASSETS; captures kept in $OUT. The demo repository is $DEMO."
