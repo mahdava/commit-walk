@@ -1,4 +1,6 @@
-<h1 align="center"><img src="assets/commit-walk-logo-outlined.svg" alt="Commit Walk" width="480"></h1>
+<p align="center"><img src="assets/commit-walk-logo-outlined.svg" alt="Commit Walk" width="480"></p>
+
+## What is Commit Walk?
 
 A Claude Code pane for walking a Git repository worktree by worktree and
 commit by commit. Pick a worktree, a commit and one of its changed files.
