@@ -17,17 +17,28 @@ tool, writes nothing to the repository and makes no network requests.
 
 <p align="center"><sub>A walk through a demo branch, recorded in a real session. The yellow pointer shows what is clicked, and the keycaps what is pressed, in the colours of the keyboard below (<a href="assets/commit-walk-demo.mp4">MP4</a>).</sub></p>
 
-## Install
+## How to install
 
 ```
 /plugin install commit-walk --marketplace mahdava/commit-walk
 ```
 
 It needs Claude Code 2.1.292 or later, Git 2.36 or later, and read access to
-this private repository. Installing from a shell or the desktop app,
-updating and removing are in [docs/INSTALL.md](docs/INSTALL.md).
+this private repository. Installing from a shell or the desktop app, and
+removing it, are in [docs/INSTALL.md](docs/INSTALL.md).
 
-## Use
+## How to update
+
+From a shell:
+
+```
+claude plugin marketplace update commit-walk
+claude plugin update commit-walk@commit-walk
+```
+
+Then run `/reload-plugins` in any open session, or start a new one.
+
+## How to use Commit Walk
 
 Run `/commit-walk` in a Claude Code session started inside a Git repository.
 It opens the pane, or closes it when it is open. The pane takes the keyboard
@@ -54,7 +65,7 @@ keyboard back to it.
 
 </details>
 
-## More
+## Resources
 
 - [Guide](docs/GUIDE.md): the commands, what the pane shows, how it follows new commits, and its limits
 - [Install](docs/INSTALL.md): requirements, installing from a shell or the desktop app, updating and removing
