@@ -19,8 +19,8 @@ Code's own plugin environment, with no Node APIs.
 | `assets/commit-walk-logo-outlined.svg` | The logo with a white outline, for dark backgrounds; the README shows it |
 | `assets/logo.png` | The first logo, as a PNG |
 | `assets/commit-walk-demo.gif`, `.mp4` | The demo at the top of the README |
-| `assets/screenshots/` | The README's screenshots |
-| `tools/screenshots/` | `make-media.sh` remakes the demo and screenshots from a real session in a throwaway repository; its header lists what it needs |
+| `assets/screenshots/` | The README's screenshot |
+| `tools/screenshots/` | `make-media.sh` remakes the demo and screenshot from a real session in a throwaway repository; its header lists what it needs |
 
 Checks:
 

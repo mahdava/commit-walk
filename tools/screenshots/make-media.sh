@@ -48,29 +48,41 @@ start() {
   sleep 2
 }
 n=0; mkdir -p "$OUT/frames"; : > "$OUT/frames/durations"
-shot() { n=$((n+1)); $T capture-pane -eNpt s > "$OUT/frames/$(printf %02d $n).ansi"; echo "$1" >> "$OUT/frames/durations"; }
-key() { $T send-keys -t s "$1"; sleep 1.2; }
-click() { "$HERE/click.sh" "$1" "$2"; sleep 1.2; }
+# shot <seconds> [json]: a capture, how long it shows, and what is being done in it.
+shot() {
+  n=$((n+1)); local f="$OUT/frames/$(printf %02d $n)"
+  $T capture-pane -eNpt s > "$f.ansi"; echo "$1" >> "$OUT/frames/durations"
+  if [ -n "${2:-}" ]; then echo "$2" > "$f.json"; fi
+}
+# key <key> <what it does> <seconds>: press it and show it pressed.
+key() { $T send-keys -t s "$1"; sleep 1.2; shot "$3" "{\"key\":\"$1\",\"label\":\"$2\"}"; }
+# click <text on screen> <column offset> <seconds>: point at it, click, show the result.
+click() {
+  local c r; read -r c r < <(at "$1"); c=$((c + $2))
+  shot 0.9 "{\"pointer\":[$c,$r]}"
+  "$HERE/click.sh" "$c" "$r"; sleep 1.2
+  shot "$3" "{\"pointer\":[$c,$r],\"ring\":true}"
+}
 # Where text first shows on screen, as "col row".
 at() { $T capture-pane -pt s | awk -v s="$1" 'i=index($0,s){print i" "NR; exit}'; }
 
-# The walk: frames 08 and 12 double as the diff and commit list stills.
+# The walk: the diff still is the frame after "j next file" on the third commit.
 start 128 40 feat/trail-difficulty
 shot 1.0
 $T send-keys -t s -l "/commit"; sleep 0.4; shot 0.4
 $T send-keys -t s -l -- "-walk"; sleep 0.6; shot 1.0
-$T send-keys -t s Enter; sleep 3; shot 2.4
-key j; shot 2.0
-key o; shot 1.6
-key o; shot 1.8
-key j; shot 2.6
-key a; shot 1.8
-key b; shot 1.8
-key d; shot 1.2
-read -r c r < <(at "Commit    "); click $((c + 20)) "$r"; shot 2.2
-read -r c r < <(at "Record the climb"); click "$c" "$r"; shot 2.4
-read -r c r < <(at "[ all ]"); click $((c + 2)) "$r"; shot 2.2
-read -r c r < <(at "Commit    "); click $((c + 20)) "$r"; shot 3.0
+$T send-keys -t s Enter; sleep 3; shot 2.4 '{"key":"Enter","label":"/commit-walk"}'
+key j "next file" 2.0
+key o "older commit" 1.6
+key o "older commit" 1.8
+key j "next file" 2.6; STILL=$(printf %02d $n)
+key a "after" 1.8
+key b "before" 1.8
+key d "diff" 1.2
+click "Commit    " 20 2.2
+click "Record the climb" 0 2.4
+click "[ all ]" 2 2.2
+click "Commit    " 20 3.0
 
 $T kill-server
 
@@ -80,7 +92,7 @@ for f in *.ansi; do args+=("$f" "${f%.ansi}.png"); done
 # Video frames are opaque: ffmpeg's GIF path cannot carry the alpha, so the
 # corners take the window's own colour. The stills keep transparent corners.
 BACKDROP='#16181b' node "$HERE/render.mjs" "${args[@]}"
-node "$HERE/render.mjs" 08.ansi diff.png 12.ansi commit-list.png
+cp "$STILL.ansi" still.ansi && node "$HERE/render.mjs" still.ansi diff.png
 
 : > list.txt
 i=0
@@ -94,5 +106,5 @@ ffmpeg -loglevel error -y -f concat -safe 0 -i list.txt \
   "$ASSETS/commit-walk-demo.gif"
 
 mkdir -p "$ASSETS/screenshots"
-cp diff.png commit-list.png "$ASSETS/screenshots/"
+cp diff.png "$ASSETS/screenshots/"
 echo "Media written to $ASSETS; captures kept in $OUT. The demo repository is $DEMO."

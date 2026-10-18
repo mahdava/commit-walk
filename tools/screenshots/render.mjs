@@ -1,6 +1,6 @@
 // render.mjs <in.ansi> <out.png> [<in.ansi> <out.png> …]: tmux `capture-pane -eN` dumps drawn as terminal windows.
 // Outside the rounded corners is transparent, or BACKDROP (a CSS colour) for video frames.
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 // Playwright is not a dependency of the mod: PLAYWRIGHT_FROM names any folder whose node_modules holds it.
@@ -75,6 +75,18 @@ const text = readFileSync(input, 'utf8').replace(/\n$/, '').split('\n')
 // Every frame is the terminal's full width (COLS), so a video's frames share one size.
 const cols = Number(process.env.COLS) || Math.max(...text.map(t => [...t.replace(/\x1b\[[0-9;:]*m/g, '')].length))
 const rows = text.map(line)
+// A frame may carry what is being done in it, in <frame>.json next to its capture:
+// { pointer: [col, row], ring: true } for a click (1-based cells), { key, label } for a key.
+const side = input.replace(/\.ansi$/, '.json')
+const act = existsSync(side) ? JSON.parse(readFileSync(side, 'utf8')) : {}
+let overlay = ''
+if (act.pointer) {
+  const [col, row] = act.pointer
+  const at = `left:calc(12px + ${col - 0.5}ch);top:${40 + (row - 1) * 15 + 7.5}px`
+  if (act.ring) overlay += `<div class="ring" style="${at}"></div>`
+  overlay += `<svg class="ptr" style="${at}" width="26" height="32" viewBox="-2 -2 22 30"><path d="M0 0 L0 22 L6 16.5 L10 25.5 L14 23.5 L10 15 L17 15 Z" fill="#fecd22" stroke="#3e1800" stroke-width="1.8" stroke-linejoin="round"/></svg>`
+}
+if (act.key) overlay += `<div class="keyhint"><span class="cap">${esc(act.key)}</span>${act.label ? `<span class="what">${esc(act.label)}</span>` : ''}</div>`
 return `<!doctype html><meta charset="utf-8"><style>
 @font-face{font-family:Sym;src:url(${process.env.SYMBOL_FONT ? 'file://' + process.env.SYMBOL_FONT : 'seguisym.ttf'})}
 html,body{background:${process.env.BACKDROP ?? 'transparent'}}
@@ -85,7 +97,14 @@ body{margin:0;display:inline-block}
 .t{position:absolute;left:0;right:0;text-align:center;color:#9a9ea3;font:12px system-ui,sans-serif}
 pre{margin:0;padding:10px 12px 12px;width:${cols}ch;overflow:hidden;color:${FG};font:13px/15px "DejaVu Sans Mono",Sym,monospace;white-space:pre}
 pre div{height:15px}
-</style><div class="win"><div class="bar"><div class="dot" style="background:#ff5f57"></div><div class="dot" style="background:#febc2e"></div><div class="dot" style="background:#28c840"></div><div class="t">${esc(title)}</div></div><pre>${rows.map(r => `<div>${r}</div>`).join('')}</pre></div>`
+.win{position:relative}
+.fx{position:absolute;inset:0;pointer-events:none;font:13px/15px "DejaVu Sans Mono",Sym,monospace}
+.ptr{position:absolute;margin:-2px 0 0 -2px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.55))}
+.ring{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:3px solid #fecd22;background:rgba(254,205,34,.22);box-sizing:border-box}
+.keyhint{position:absolute;right:26px;bottom:78px;display:flex;align-items:center;gap:10px;font:600 15px system-ui,sans-serif}
+.cap{min-width:38px;height:38px;padding:0 10px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:9px;background:#fecd22;color:#3e1800;font:800 19px "DejaVu Sans Mono",monospace;box-shadow:0 4px 0 #b88a00,0 6px 14px rgba(0,0,0,.5)}
+.what{padding:7px 12px;border-radius:999px;background:rgba(20,10,0,.82);color:#fecd22;border:1px solid rgba(254,205,34,.5)}
+</style><div class="win"><div class="bar"><div class="dot" style="background:#ff5f57"></div><div class="dot" style="background:#febc2e"></div><div class="dot" style="background:#28c840"></div><div class="t">${esc(title)}</div></div><pre>${rows.map(r => `<div>${r}</div>`).join('')}</pre><div class="fx">${overlay}</div></div>`
 
 }
 const browser = await chromium.launch()

@@ -1,6 +1,4 @@
-# commit-walk
-
-<p align="center"><img src="assets/commit-walk-logo-outlined.svg" alt="Commit Walk: a sunflower in green sneakers walking a line of four commits lettered W, A, L and K" width="480"></p>
+<h1 align="center"><img src="assets/commit-walk-logo-outlined.svg" alt="Commit Walk" width="480"></h1>
 
 A Claude Code pane for walking a Git repository worktree by worktree and
 commit by commit. Pick a worktree, a commit and one of its changed files.
@@ -13,9 +11,9 @@ leaving the session.
 Everything comes from git and is only read. The plugin gives the model no
 tool, writes nothing to the repository and makes no network requests.
 
-<p align="center"><img src="assets/commit-walk-demo.gif" alt="Commit Walk in a Claude Code session: the pane opens on a feature branch, steps through files and older commits, switches between Diff, After and Before, picks a commit from the unfolded list and switches the range to all commits" width="900"></p>
+<p align="center"><img src="assets/commit-walk-demo.gif" alt="Commit Walk in a Claude Code session: the pane opens on a feature branch, steps through files and older commits with keys shown as yellow keycaps, switches between Diff, After and Before, then a yellow pointer unfolds the commit list, picks a commit and switches the range to all commits" width="900"></p>
 
-<p align="center"><sub>A walk through a demo branch, recorded in a real session (<a href="assets/commit-walk-demo.mp4">MP4</a>).</sub></p>
+<p align="center"><sub>A walk through a demo branch, recorded in a real session. The yellow pointer and keycaps show what is clicked and pressed (<a href="assets/commit-walk-demo.mp4">MP4</a>).</sub></p>
 
 ## Contents
 
@@ -154,8 +152,6 @@ From the top down:
 5. **Files**, always unfolded: the files the commit changed, with their
    status letter in colour and their line counts. Renames show as
    `old → new`, and binary files say "binary". Prev and Next sit above it.
-
-<p align="center"><img src="assets/screenshots/commit-list.png" alt="The Commit row unfolded into the list of the branch's four commits, the selected one marked with a triangle and the longest subject ending in an ellipsis" width="820"></p>
 
 Every list is a frame of whole-row buttons, so a click on a row picks it,
 and the row under the pointer is highlighted. The selected row is marked ▶.
