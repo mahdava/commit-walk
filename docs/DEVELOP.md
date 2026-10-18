@@ -17,7 +17,6 @@ Code's own plugin environment, with no Node APIs.
 | `.claude-plugin/marketplace.json` | Makes the repository its own marketplace |
 | `assets/commit-walk-logo.svg` | The logo |
 | `assets/commit-walk-logo-outlined.svg` | The logo with a white outline, for dark backgrounds; the README shows it |
-| `assets/logo.png` | The first logo, as a PNG |
 | `assets/commit-walk-demo.gif`, `.mp4` | The demo at the top of the README |
 | `assets/screenshots/` | The guide's screenshot |
 | `assets/sunflower-emoji.svg` | Noto Emoji's 🌻 (Apache 2.0), before each README heading with an empty alt so screen readers skip it |
