@@ -257,7 +257,7 @@ that fits with room for the message under it:
 | --- | --- | --- |
 | Large sunflower | 71 × 36 | 73 columns and 46 rows |
 | Sunflower, above | 45 × 22 | 47 columns and 32 rows |
-| Small sunflower | 18 × 11 | Any room: the pane is always at least 24 columns |
+| Small sunflower | 23 × 11 | Any room: the pane is always at least 24 columns |
 
 All three sunflowers are Lucia's drawings. The two larger ones take their
 colours from a mask per row in `hooks/welcome.ts`, one letter per character.

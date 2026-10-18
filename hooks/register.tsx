@@ -395,7 +395,8 @@ export const register: Register = on => {
 
     const welcome = () => {
       const fits = (art: Art, roomBelow: number) => width >= art.width + 2 && rows >= art.rows.length + roomBelow
-      const source = fits(LARGE, 10) ? LARGE : fits(MEDIUM, 10) ? MEDIUM : width >= SMALL.width + 2 ? SMALL : null
+      // The small one needs a single spare column, so it fits even the narrowest (24-column) pane.
+      const source = fits(LARGE, 10) ? LARGE : fits(MEDIUM, 10) ? MEDIUM : width >= SMALL.width + 1 ? SMALL : null
       artTier = source === LARGE ? 'large' : source === MEDIUM ? 'medium' : source === SMALL ? 'small' : 'one-line mark'
       if (source === null) {
         return (

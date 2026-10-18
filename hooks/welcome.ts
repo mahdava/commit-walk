@@ -181,30 +181,31 @@ export const MEDIUM = art([
   "           hhhhhhh             h"
 ])
 
-/** Lucia's small sunflower, 18 × 11, made in the ASCII Fantasy Map Builder: each character in its palette colour. */
+/** Lucia's small sunflower, 23 × 11, made in the ASCII Fantasy Map Builder: each character in its palette colour. */
 export const SMALL = art(
 [
-  "        ##",
-  "  ###  #..#   ##",
-  " ##..###..####..#",
-  "  #..#@///// #..#",
-  " ###@//●//●//####",
-  "#....@///U///#...#",
-  " ### @////// #..##",
-  "      I    I  oo",
-  "     I      Iooo",
-  "    ooo     ooo",
-  "    ooooo"
+  "          ##",
+  "    ###  #..#   ##",
+  "   ##..###..####..#",
+  "    #..#@///// #..#",
+  "   ###@//●//●//####==",
+  "==#....@///ᵕ///#...#===",
+  " ==### @////// #..##==",
+  "   ===  I    I  oo",
+  "       I      Iooo",
+  "      ooo     ooo",
+  "      ooooo"
 ],
   [],
 {
     "#": "#c49a03",
     ".": "#c49a03",
     "/": "#421e05",
+    "=": "#2d6d2d",
     "@": "#421e05",
     "I": "#2d6d2d",
-    "U": "#f05151",
     "o": "#0f5106",
+    "ᵕ": "#f05151",
     "●": "#ffffff"
   },
 )
