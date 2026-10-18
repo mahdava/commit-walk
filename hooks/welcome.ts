@@ -6,10 +6,12 @@
 export type Tone =
   | 'petal' | 'petalEdge' | 'face' | 'faceEdge' | 'eye' | 'mouth' | 'leaf' | 'leafEdge'
   | 'stem' | 'shoe' | 'shoeEdge' | 'motion' | 'line' | 'blue' | 'green' | 'yellow' | 'red'
+  | 'faceDark' | 'leafDark' | 'smile' | 'sole'
 
 const TONE_OF: Record<string, Tone> = {
   p: 'petal', P: 'petalEdge', f: 'face', F: 'faceEdge', e: 'eye', m: 'mouth', l: 'leaf', L: 'leafEdge',
   s: 'stem', h: 'shoe', H: 'shoeEdge', w: 'motion', d: 'line', B: 'blue', G: 'green', Y: 'yellow', R: 'red',
+  x: 'faceDark', k: 'leafDark', u: 'smile', o: 'sole',
 }
 
 /** Raw colours, after the logo; `undefined` keeps the theme's own text colour. */
@@ -31,6 +33,11 @@ export const TONE_COLOR: Record<Tone, string | undefined> = {
   green: '#2EA043',
   yellow: '#F5B800',
   red: '#EF4444',
+  // Colours Lucia added when she recoloured the medium sunflower.
+  faceDark: '#2A1104',
+  leafDark: '#0F5106',
+  smile: '#F05151',
+  sole: '#BFBBBB',
 }
 
 /** Tones drawn dim. */
@@ -131,30 +138,30 @@ export const LARGE = art([
   "                     hhhhhhh"
 ])
 
-/** Lucia's smaller sunflower, 45 × 22: the usual welcome art. */
+/** Lucia's smaller sunflower, 45 × 22, as she recoloured it: the usual welcome art. */
 export const MEDIUM = art([
   "                       .--",
   "             -+----  .-...--",
-  "             +.....-++.....+. .---.",
-  "       .-----#......-+.....++-....+",
-  "       -......+-.....+--...+......+  .+.",
-  "       --......-+-++++++++#-.....-- .-  .-.",
-  "       -++---..-#-----------+-..++--   --",
-  "    -+-......-++----------++-+#-....--",
-  "    --........#----++-----##--#.....--",
-  "    .-+.......#----##+---+++--#-..-+.",
-  "++++-+++#++++-#-----+++++#+---#--++++++++-.",
-  "++-------#+....#+-----++++---#-....++----++",
-  " +++++++#+......+#+-------++#-.....-#+--++",
-  "  -+++++#-.....-+..-++++++-..-+----+++++.",
-  "    .----+-----#......--......# .-----.",
+  "             +.....-##.....#. .---.",
+  "       .-----#......-#.....#+-....+",
+  "       #......#-.....#--...#......+  .+.",
+  "       #-......#+-++++++++#-.....#- .-  .-.",
+  "       #++---..-#-----------+-.##+--   --",
+  "    ###.#....-+#--------------#-....--",
+  "    -#...#---.##----#------#--#.....--",
+  "    .-#.......#-----#------#--#-..-+.",
+  "++++-+++#++++-#---------Ս-----#--++++++++--",
+  "++-------#+....#+------------#-....++----++",
+  " +++++++#+......#-+--------+#-.....-#+--++",
+  "  -+++++#-.....------+++++-..-+----+++++-",
+  "    -----+-----#......--......# -------",
   "               #-.....++-.....+",
   "             -###+..--   .-++#.    ...  .- .",
-  "          .++###  ..        +##+---.  -. +.--",
-  "        .-..+---            .+.+---.-++.   -",
-  "       .-----+--..           #----+#+-",
-  "        ..-..-. .-           .--+#-.",
-  "           ....---             ."
+  "          .#####  ..        +##+####  -. +.--",
+  "        .#O.####            .#++---+#++.   -",
+  "       .#----+-#..          #O-----#+-",
+  "        .#-..-. ##          #+----#.",
+  "           ....---           #+++"
 ],
 [
   "                       pPP",
@@ -163,22 +170,22 @@ export const MEDIUM = art([
   "       pPPPPPPppppppPPpppppPPPppppP",
   "       PppppppPPpppppPPPpppPppppppP  www",
   "       PPppppppPPPPFFFFFFFFFpppppPP ww  www",
-  "       PPffffppfFfffffffffffffppPPPw   ww",
-  "    PPPppppppfffffffffffffffffPPppppPP",
-  "    PPppppppppefffffffffffeeffFpppppPP",
-  "    pPPpppppppeffffeefffffffffFPppPPp",
-  "llllllllPfffffeffffffffffeffffFlllllllllllp",
+  "       PPffffppfFfffffffffffffpPPPPw   ww",
+  "    PPPpPppppffFffffffffFFFFFFPPppppPP",
+  "    PPpppPPPPpFFffffeffffffeffFpppppPP",
+  "    pPPpppppppFfffffxffffffxffFPppPPp",
+  "llllllllPfffffFfffffffffufffffFllllllllllll",
   "lllllllllPfppppFfffffffffffffFfppppllllllll",
-  " lllllllLfppppppfFffffffffffFfppppplLlllll",
-  "  llllllLfpppppffppffffffffppfflllllllllp",
-  "    pLLLLPPPPPPPppppppFFppppppP plllllp",
-  "               hhhhhhhhhhhhhhhh",
-  "             hhhhhhhhh   hhhhhh    www  ww w",
-  "          hhhhhh  hh        hhhhhhww  ww wwww",
-  "        hhhhhhhh            hhhhhhwwwwww   w",
-  "       hhhhhhhhhhh           hhhhhwwww",
-  "        hhhhhhh hh           hhhhhww",
-  "           hhhhhhh             h"
+  " kkkkkkkkfppppppFFffffffffffFfpppppkkkkkkk",
+  "  kkkkkkkfpppppfFFFFFffffffppffkkkkkkkkkk",
+  "    kkkkkPPPPPPPppppppFFppppppP kkkkkkk",
+  "               llllllllllllllll",
+  "             lllllllll   llllll    www  ww w",
+  "          kkklll  ll        llllkkkk  ww wwww",
+  "        kkokkkkk            kkkkkkkkkwww   w",
+  "       kkkkkkkkkkk          kokkkkkkww",
+  "        kkkkkkk kk          kkkkkkkw",
+  "           kkkkkkk           kkkk"
 ])
 
 /** The commit line under the small sunflower: the same four commits on a 22-column track. */
