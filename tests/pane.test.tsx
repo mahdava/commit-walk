@@ -453,6 +453,51 @@ test('the Commits row offers what the worktree has: not in the default branch, s
   await ui.unmount()
 })
 
+test('h cycles the ranges, and a range switch keeps a commit the new range has', async ($, on) => {
+  const world = scenario()
+  const hex = (n: number) => n.toString(16).padStart(40, '0')
+  world.logs['/repo-side'] = Array.from({ length: 5 }, (_, i) => ({
+    sha: hex(500 - i), parents: [hex(499 - i)], subject: `Side ${5 - i}`,
+    files: [{ status: 'M', path: 'side.ts', added: 1, deleted: 0 }],
+  }))
+  world.originHead = 'origin/main'
+  world.ahead = { '/repo-side': { 'origin/main': 3, 'feat-base': 2 } }
+  world.distances = { '/repo-side': 'main\t4 3\nside\t0 0\nfeat-base\t1 2\nchild\t2 0\nfar\t9 4\n' }
+  engine(on, world)
+  const { ui } = await openPane($, 'terminal')
+  const hotkeyOn = async () => {
+    for (const mode of ['all', 'notInDefault', 'base']) if ((await ui.find({ key: `range-${mode}` }))?.props.hotkey === 'h') return mode
+    return null
+  }
+  const chosen = async () => {
+    for (const mode of ['all', 'notInDefault', 'base']) if ((await ui.find({ key: `range-${mode}` }))?.props.variant === 'primary') return mode
+    return null
+  }
+  // On main the welcome screen's h is the step to all commits.
+  expect(await hotkeyOn()).toBe('all')
+
+  await pickFrom(ui, 'worktree', '/repo-side')
+  expect(await chosen()).toBe('notInDefault')
+  expect(await hotkeyOn()).toBe('base')
+  // Pinned to the third commit, which "not in" and "all" have and "since feat-base" does not.
+  await ui.press({ key: 'older' })
+  await ui.press({ key: 'older' })
+  expect(await current(ui, 'commit')).toMatch(/Side 3/)
+
+  await ui.press({ key: 'range-all' })
+  expect(await chosen()).toBe('all')
+  expect(await hotkeyOn()).toBe('notInDefault')
+  expect(await current(ui, 'commit')).toMatch(/Side 3/)
+
+  await ui.press({ key: 'range-notInDefault' })
+  expect(await current(ui, 'commit')).toMatch(/Side 3/)
+  // Not in the new range: the newest of it.
+  await ui.press({ key: 'range-base' })
+  expect(await current(ui, 'commit')).toMatch(/Side 5/)
+  expect(await hotkeyOn()).toBe('all')
+  await ui.unmount()
+})
+
 test('a repository whose default branch is master, with no origin/HEAD', async ($, on) => {
   const world = scenario()
   world.originHead = null

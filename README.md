@@ -104,6 +104,7 @@ keyboard:
 | `o` / `n` | Older / newer commit |
 | `k` / `j` | Previous / next file |
 | `d` / `a` / `b` | Diff / After / Before |
+| `h` | Next commit range: all, not in main, since the base branch, in turn |
 | `r` | Refresh |
 | `x` | Shows or hides the debug section |
 | `Esc` | Closes the pane |
@@ -134,11 +135,13 @@ From the top down:
    **not in** is chosen by default, since work normally happens on
    branches. On the default branch itself, or on a branch level with it,
    that range is empty and the pane shows the welcome screen. On the
-   default branch it says so and offers **Show all commits** (`h`). On a
+   default branch it says so and offers **Show all commits**. On a
    branch level with it, the pane waits there and moves to the first commit
-   as soon as it lands. A range you pick becomes the choice and follows you
-   across worktrees; where a worktree does not offer it, the list shows all
-   commits.
+   as soon as it lands. `h` moves to the next range the worktree offers,
+   in turn, as does a click on a range. Switching keeps the selected commit
+   when the new range has it, and otherwise moves to that range's newest. A
+   range you pick becomes the choice and follows you across worktrees; where
+   a worktree does not offer it, the list shows all commits.
 
    The default branch is whatever `origin/HEAD` points at, `master`
    included. Without `origin/HEAD` it is local `main`, local `master`,

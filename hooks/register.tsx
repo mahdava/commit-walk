@@ -611,6 +611,9 @@ export const register: Register = on => {
       ...(snap.ranges.notInDefault ? [{ mode: 'notInDefault' as const, label: `not in ${snap.ranges.notInDefault.ref} · ${snap.ranges.notInDefault.count}` }] : []),
       ...(snap.ranges.base ? [{ mode: 'base' as const, label: `since ${snap.ranges.base.ref} · ${snap.ranges.base.count}` }] : []),
     ]
+    // `h` cycles through them: it sits on the option after the chosen one.
+    // Switching keeps the selected commit when the new range has it.
+    const nextRange = rangeOptions[(rangeOptions.findIndex(option => option.mode === snap.range) + 1) % rangeOptions.length]?.mode
     const rangeRow =
       rangeOptions.length < 2 ? null : (
         <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
@@ -618,9 +621,10 @@ export const register: Register = on => {
           {rangeOptions.map(option => (
             <Button
               key={`range-${option.mode}`}
+              {...(option.mode === nextRange ? { hotkey: 'h' } : {})}
               variant={snap.range === option.mode ? 'primary' : undefined}
               dimColor={snap.range !== option.mode}
-              onPress={() => void load($, 'commit', { range: option.mode, commit: null, file: null })}
+              onPress={() => void load($, 'commit', { range: option.mode })}
             >
               {option.label}
             </Button>
@@ -652,7 +656,7 @@ export const register: Register = on => {
       const isNotInDefault = snap.range === 'notInDefault'
       const showAll = (
         <Box>
-          <Button key="show-all" hotkey="h" onPress={() => void load($, 'commit', { range: 'all', commit: null, file: null })}>
+          <Button key="show-all" onPress={() => void load($, 'commit', { range: 'all', commit: null, file: null })}>
             Show all commits
           </Button>
         </Box>
@@ -768,7 +772,7 @@ export const register: Register = on => {
           </Box>
         )}
 
-        <Text dimColor wrap="truncate-end">keys: o/n commit · k/j file · d/a/b view · r refresh · x debug · Esc close</Text>
+        <Text dimColor wrap="truncate-end">keys: o/n commit · k/j file · d/a/b view · h range · r refresh · x debug · Esc close</Text>
       </Box>
     )
   })
