@@ -73,6 +73,17 @@ function line(text) {
 
 const pageFor = input => {
 const text = readFileSync(input, 'utf8').replace(/\n$/, '').split('\n')
+// The hint line, just above the prompt's top rule, carries Claude Code's tips and
+// notices (effort, tmux tips, how much of the plan's usage is spent): none of it is
+// the pane's, and some of it is the account's, so it is blanked left of the pane.
+const ruleAt = text.findIndex(t => /─ claude ─/.test(t.replace(/\x1b\[[0-9;:]*m/g, '')))
+if (ruleAt > 0) {
+  const hint = text[ruleAt - 1]
+  const bar = hint.indexOf('│')
+  const left = bar < 0 ? hint : hint.slice(0, bar)
+  const blank = ' '.repeat([...left.replace(/\x1b\[[0-9;:]*m/g, '')].length)
+  text[ruleAt - 1] = bar < 0 ? blank : blank + '\x1b[0m' + hint.slice(bar)
+}
 // Every frame is the terminal's full width (COLS), so a video's frames share one size.
 const cols = Number(process.env.COLS) || Math.max(...text.map(t => [...t.replace(/\x1b\[[0-9;:]*m/g, '')].length))
 const rows = text.map(line)
