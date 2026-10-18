@@ -18,10 +18,9 @@ app: every control is a button.
 
 ## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> Install
 
-The repository is private. Installing needs read access to it on GitHub and
-a git credential for github.com on the machine. That is an SSH key, or
-`gh auth login` followed by `gh auth setup-git`. The install never prompts
-for a credential.
+There is no need to clone the repository. Each way below fetches Commit Walk
+from GitHub into Claude Code's own plugins folder, and updates come the same
+way. Clone it only to work on the plugin; see [Developing Commit Walk](DEVELOP.md).
 
 At the prompt of a Claude Code terminal session:
 

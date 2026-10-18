@@ -11,6 +11,10 @@
 # (SYMBOL_FONT=<path>, for example Segoe UI Symbol). Claude Code runs with no
 # tools and ANTHROPIC_API_KEY unset; nothing is sent to the model.
 #
+# DEMO_SETTINGS, optional, is JSON for the recorded session's --settings, for
+# example to turn off a plugin of yours that would show in the transcript:
+# DEMO_SETTINGS='{"enabledPlugins":{"some-plugin@some-marketplace":false}}'.
+#
 #   PLAYWRIGHT_FROM=~/some/app SYMBOL_FONT=/mnt/c/Windows/Fonts/seguisym.ttf ./make-media.sh
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -38,7 +42,7 @@ start() {
   $T kill-server 2>/dev/null || true; sleep 1
   $T -f "$HERE/tmux.conf" new-session -d -s s -x "$1" -y "$2" -c "$DEMO" \
     -e COLORTERM=truecolor -e CLAUDE_CODE_TMUX_TRUECOLOR=1 \
-    "env -u ANTHROPIC_API_KEY claude --tools '' --settings '{\"enabledPlugins\":{\"nsf-approvals@lucia-mods\":false}}'; sleep 600"
+    "env -u ANTHROPIC_API_KEY claude --tools '' --settings '${DEMO_SETTINGS:-{\}}'; sleep 600"
   for _ in $(seq 1 20); do
     sleep 1
     # The first run in a new folder asks to trust it: this script just made it.

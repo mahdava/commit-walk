@@ -1,7 +1,12 @@
 {
   "name": "commit-walk",
   "version": "1.16.1",
-  "author": { "name": "Lucia" },
-  "description": "Review a Git repository worktree by worktree and commit by commit in a pane: each changed file as a diff or as the whole file before and after. Read-only; everything comes from git.",
+  "description": "A Claude Code mod: walk a Git repository worktree by worktree and commit by commit in a pane, each changed file as a diff or as the whole file before and after. Read-only; everything comes from git.",
+  "author": {
+    "name": "Lucia Nazzaro",
+    "url": "https://github.com/mahdava"
+  },
+  "homepage": "https://github.com/mahdava/commit-walk",
+  "repository": "https://github.com/mahdava/commit-walk",
   "types": "./types/index.d.ts"
 }
