@@ -73,8 +73,9 @@ const pageFor = input => {
 const rows = readFileSync(input, 'utf8').replace(/\n$/, '').split('\n').map(line)
 return `<!doctype html><meta charset="utf-8"><style>
 @font-face{font-family:Sym;src:url(${process.env.SYMBOL_FONT ? 'file://' + process.env.SYMBOL_FONT : 'seguisym.ttf'})}
-body{margin:0;padding:28px;background:#e9e4dc;display:inline-block}
-.win{border-radius:10px;overflow:hidden;box-shadow:0 12px 40px rgba(40,30,20,.28);background:${BG}}
+html,body{background:transparent}
+body{margin:0;display:inline-block}
+.win{border-radius:10px;overflow:hidden;background:${BG}}
 .bar{height:30px;background:#26292d;display:flex;align-items:center;padding:0 12px;gap:7px;position:relative}
 .dot{width:12px;height:12px;border-radius:50%}
 .t{position:absolute;left:0;right:0;text-align:center;color:#9a9ea3;font:12px system-ui,sans-serif}
@@ -90,6 +91,6 @@ for (let i = 0; i < pairs.length; i += 2) {
   writeFileSync(html, pageFor(pairs[i]))
   await tab.goto('file://' + html)
   await tab.evaluate(() => document.fonts.ready)
-  await (await tab.$('body')).screenshot({ path: pairs[i + 1] })
+  await (await tab.$('body')).screenshot({ path: pairs[i + 1], omitBackground: true })
 }
 await browser.close()

@@ -21,6 +21,16 @@ T="tmux -L cwshots"
 
 "$HERE/make-demo-repo.sh" "$DEMO"
 
+# The pane opens at the dock width you last dragged it to, kept in
+# ~/.claude.json. Record at a fixed 76 columns and put yours back after.
+dock() { node -e '
+const fs = require("fs"), f = process.env.HOME + "/.claude.json", c = JSON.parse(fs.readFileSync(f, "utf8"))
+const was = c.pluginPanes?.dockColumns
+if (process.argv[1] !== "") { c.pluginPanes = { ...c.pluginPanes, dockColumns: Number(process.argv[1]) } } else if (c.pluginPanes) delete c.pluginPanes.dockColumns
+fs.writeFileSync(f + ".tmp", JSON.stringify(c, null, 2)); fs.renameSync(f + ".tmp", f); console.log(was ?? "")' "$1"; }
+WAS_DOCK=$(dock 76)
+trap 'dock "$WAS_DOCK" > /dev/null' EXIT
+
 # Claude Code in the demo repository, cols × rows, on the given branch.
 start() {
   git -C "$DEMO" switch -q "$3"
@@ -76,7 +86,7 @@ ffmpeg -loglevel error -y -f concat -safe 0 -i list.txt \
   -vf "fps=30,scale=1600:-2:flags=lanczos,format=yuv420p" -c:v libx264 -crf 20 -preset slow -movflags +faststart \
   "$ASSETS/commit-walk-demo.mp4"
 ffmpeg -loglevel error -y -f concat -safe 0 -i list.txt \
-  -vf "scale=1100:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=none" -fps_mode vfr \
+  -vf "scale=1100:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:reserve_transparent=1[p];[b][p]paletteuse=dither=none:alpha_threshold=128" -fps_mode vfr \
   "$ASSETS/commit-walk-demo.gif"
 
 mkdir -p "$ASSETS/screenshots"
