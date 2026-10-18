@@ -78,16 +78,16 @@ process.stdout.write(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} 
 <desc id="d">${legend}</desc>
 <rect width="${W}" height="${H}" rx="24" fill="${C.bodyEdge}"/>
 <rect x="3" y="3" width="${W - 6}" height="${H - 9}" rx="22" fill="${C.body}"/>
-${logo()}
 ${out}
+${logo()}
 </svg>
 `)
 
-/** The outlined logo, bottom left: under the third row, left of the arrows. */
+/** The outlined logo, bottom left, left of the arrows: drawn over the keys, so it may overlap Shift. */
 function logo() {
   const source = readFileSync(new URL('../../assets/commit-walk-logo-outlined.svg', import.meta.url), 'utf8')
   const [vw, vh] = source.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/).slice(1).map(Number)
-  const height = 84
+  const height = 112
   const width = (height * vw) / vh
   const x = PAD + 4
   const y = H - PAD - height + 2
