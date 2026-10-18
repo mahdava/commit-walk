@@ -5,16 +5,36 @@
 The plugin is a Claude Code mod: a hooks module that runs inside Claude
 Code's own plugin environment, with no Node APIs.
 
+Two rules of that environment shape how the code is split:
+
+- **`$` stays in register.tsx.** Claude Code before 2.1.300 follows `$` only
+  into functions of the file that holds it, never into an imported one. So
+  everything that uses `$` lives in `register.tsx`. The pane's parts in
+  `hooks/pane/` never take `$`: they draw from the values `register.tsx`
+  reads and call the actions it builds. Once the oldest supported Claude
+  Code is 2.1.300 or later, the loading and stepping can move to a file of
+  their own.
+- **An atom is declared where it is read or written.** `read` and `update`
+  take only an atom declared in the same file, so the atoms are in
+  `register.tsx` too.
+
 | File | Holds |
 | --- | --- |
+| `hooks/register.tsx` | Everything that uses `$`: the hooks, the state, loading from git and stepping. It builds the actions the pane's buttons take. |
+| `hooks/state.ts` | Constants and the first values of the state |
 | `hooks/git.ts` | The git commands and NUL-safe parsers. It makes no engine calls, so tests drive it with canned output. |
-| `hooks/register.tsx` | The hooks: the command, the refresh triggers and the pane |
+| `hooks/labels.ts` | Worktrees, commits and files as one line of text |
+| `hooks/pane/index.tsx` | The pane, one screen at a time: no repository, reading, nothing to walk, the walk |
+| `hooks/pane/frame.ts` | What every part draws with: the values, the actions, the elements and the room |
+| `hooks/pane/header.tsx`, `debug.tsx`, `commits.tsx`, `ranges.tsx`, `files.tsx`, `view.tsx`, `welcome.tsx` | One part of the pane each |
+| `hooks/pane/list.tsx` | The lists: rows, scroll column, hover cards, folding |
 | `hooks/window.ts` | The window of rows a long list shows |
 | `hooks/welcome.ts` | The welcome art, with a colour mask per row |
 | `types/index.d.ts` | The state contract: the values kept in the session's plugin state |
+| `tests/support.ts` | The tests' fake repository, fake git and engine, and helpers that read the drawing |
+| `tests/walk.test.tsx`, `lists.test.tsx`, `ranges.test.tsx`, `welcome.test.tsx`, `debug.test.tsx` | Pane tests by feature, on the terminal, desktop and mobile surfaces |
 | `tests/git.test.ts` | Parser and fitting tests |
 | `tests/window.test.ts` | List window tests |
-| `tests/pane.test.tsx` | Pane tests on the terminal, desktop and mobile surfaces |
 | `.claude-plugin/plugin.json` | The manifest |
 | `.claude-plugin/marketplace.json` | Makes the repository its own marketplace |
 | `assets/commit-walk-logo.svg` | The logo |

@@ -2,6 +2,16 @@
 // commit by commit, each changed file as a diff or as the whole file before
 // and after. Everything shown comes from git; nothing is written anywhere.
 //
+// This file holds everything that uses `$`: the hooks, the state, loading and
+// stepping. Claude Code before 2.1.300 follows `$` only into functions of the
+// file that holds it, so this part stays in one file. The rest lives in:
+//   pane/       the pane, one part per file, put together in pane/index.tsx;
+//               it draws from the values read here and calls the actions built here
+//   state.ts    constants and the first values of the state
+//   git.ts      the git commands and their parsers
+//   labels.ts   worktrees, commits and files as one line of text
+//   welcome.ts  the welcome art; window.ts  the rows a long list shows
+//
 // Shape: the pane draws from two values the host keeps for the session
 // (`selection`, where the person is; `snapshot`, what was loaded for it), so
 // a hot reload keeps the place. Loading happens in handlers and events, never
@@ -10,38 +20,15 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { About, ChangedFile, Commit, Content, Expandable, GitTrace, RangeMode, Ranges, Selection, Snapshot, ViewMode, Worktree } from '../types'
+import type { About, ChangedFile, Commit, Content, Expandable, GitTrace, RangeMode, Ranges, Selection, ViewMode, Worktree } from '../types'
 import { createRepo, type GitRun, type Repo } from './git'
-import { COMMIT_LINE, DIM_TONES, LARGE, MEDIUM, SMALL, SMALL_LINE, TONE_COLOR, artRuns, type Art } from './welcome'
-import { scrollStart, type ListScroll } from './window'
-
-const PANE = 'commit-walk'
-const TITLE = 'Commit walk'
-/** Width the dock asks for beside a fullscreen transcript. */
-const PANE_COLUMNS = 84
-/** Debounce for refreshes after edits and turns. */
-const REFRESH_DELAY_MS = 400
-/** Rows a list shows at once; more page with its edge rows. */
-const LIST_ROWS = 8
-/** The colour of git's status letter in the file list. */
-const STATUS_COLOR: Partial<Record<string, string>> = { A: '#2EA043', D: '#EF4444', R: '#3B82F6', C: '#3B82F6', M: '#E08A00' }
-const GIT_TIMEOUT_MS = 20_000
-/** Tools whose successful, non-read-only calls may have changed the repository. */
-const WRITING_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'Bash'] as const
-
-const INITIAL_SELECTION: Selection = { worktree: null, commit: null, file: null, mode: 'diff', isFollowing: true, range: 'notInDefault' }
-const EMPTY_SNAPSHOT: Snapshot = {
-  repoRoot: null,
-  worktrees: [],
-  commits: [],
-  ranges: { branch: null, isOnDefault: false, notInDefault: null, base: null },
-  range: 'all',
-  files: [],
-  content: null,
-  isLoading: false,
-  error: null,
-  loadedAt: null,
-}
+import { drawPane } from './pane'
+import { frameOf, type Actions, type PaneValues } from './pane/frame'
+import {
+  EMPTY_SNAPSHOT, GIT_TIMEOUT_MS, INITIAL_SELECTION, PANE, PANE_COLUMNS, REFRESH_DELAY_MS, TITLE, TRACE_LENGTH, WRITING_TOOLS,
+  type Depth,
+} from './state'
+import type { ListScroll } from './window'
 
 const selection = atom({ plugin: 'commit-walk', key: 'selection' } as const, INITIAL_SELECTION)
 const snapshot = atom({ plugin: 'commit-walk', key: 'snapshot' } as const, EMPTY_SNAPSHOT)
@@ -50,14 +37,109 @@ const scroll = atom({ plugin: 'commit-walk', key: 'scroll' } as const, {} as Rec
 const debugOn = atom({ plugin: 'commit-walk', key: 'debug' } as const, false)
 const trace = atom({ plugin: 'commit-walk', key: 'trace' } as const, [] as GitTrace[])
 const about = atom({ plugin: 'commit-walk', key: 'about' } as const, { pluginVersion: null, engineVersion: null, cwd: '' } as About)
-/** Git commands the debug section keeps. */
-const TRACE_LENGTH = 10
 
 /** The session's working directory: where the repository is looked for. */
 let sessionCwd = ''
 /** Bumped by every load; a load whose ticket is no longer current writes nothing. */
 let generation = 0
 let refreshTimer: { cancel(): void } | null = null
+
+// ── The hooks ────────────────────────────────────────────────────────────
+
+export const register: Register = on => {
+  on('session.start', async ($, e, next) => {
+    sessionCwd = e.cwd
+    await update($, about, () => ({ pluginVersion: null, engineVersion: null, cwd: e.cwd }))
+    void aboutHere($, e.cwd).then(found => update($, about, () => found))
+    // Named after the plugin. (/review is refused: it is an alias of the built-in /code-review.)
+    try {
+      await $.command.register({
+        name: 'commit-walk',
+        description: 'Open or close the commit walk pane: worktrees, commits and files of this repository',
+        argumentHint: '[refresh|close|debug]',
+        immediate: true,
+      })
+    } catch (cause) {
+      $.ui.log(`commit-walk: /commit-walk is unavailable: ${messageOf(cause)}`)
+    }
+    return next(e)
+  })
+
+  on('command.run', { command: 'commit-walk' }, async ($, e) => {
+    const arg = e.args.trim()
+    const isOpen = await isPaneOpen($)
+    if (arg === 'close' || (arg === '' && isOpen)) {
+      cancelRefresh()
+      await $.ui.close({ id: PANE })
+      return { text: 'Commit walk closed.' }
+    }
+    if (arg === 'debug') {
+      const isOn = !(await read($, debugOn))
+      await update($, debugOn, () => isOn)
+      if (!isOpen) {
+        await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true, columns: PANE_COLUMNS })
+        await load($, 'repo')
+      }
+      return { text: `Commit walk debug section ${isOn ? 'shown' : 'hidden'}.` }
+    }
+    if (arg !== '' && arg !== 'refresh') return { text: 'Usage: /commit-walk [refresh|close|debug]' }
+
+    // Open first so the pane shows its loading line, then answer once it has loaded.
+    const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true, columns: PANE_COLUMNS })
+    await load($, 'repo')
+    if (!opened.isPlaced) return { text: `Commit walk is open but not drawn yet: ${opened.reason}` }
+    return { text: arg === 'refresh' ? 'Commit walk refreshed.' : 'Commit walk opened.' }
+  })
+
+  on('ui.close', { id: PANE }, async ($, e, next) => {
+    cancelRefresh()
+    return next(e)
+  })
+
+  on('tool.call', { tool: WRITING_TOOLS }, async ($, e, next) => {
+    const result = await next(e)
+    if (!result.deny && result.isError !== true && result.isReadOnly !== true) scheduleRefresh($)
+    return result
+  })
+
+  on('turn.complete', async ($, e, next) => {
+    const result = await next(e)
+    scheduleRefresh($)
+    return result
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const place = { bodyColumns: e.props.bodyColumns, bodyRows: e.props.scroll.bodyRows, placement: e.props.placement, surface: e.surface }
+    return drawPane(frameOf(await paneValues($), actionsFor($), $.ui.resolve(e), place))
+  })
+}
+
+// ── What the pane draws from, and what its buttons do ────────────────────
+
+async function paneValues($: EngineInterface): Promise<PaneValues> {
+  const isDebug = await read($, debugOn)
+  return {
+    sel: await read($, selection),
+    snap: await read($, snapshot),
+    open: await read($, expanded),
+    scrolled: await read($, scroll),
+    isDebug,
+    gitRuns: isDebug ? await read($, trace) : [],
+    where: isDebug ? await read($, about) : null,
+  }
+}
+
+function actionsFor($: EngineInterface): Actions {
+  return {
+    load: (depth, change) => void load($, depth, change),
+    stepCommit: delta => void stepCommit($, delta),
+    stepFile: delta => void stepFile($, delta),
+    toggleDebug: () => void update($, debugOn, now => !now),
+    toggleList: which => void update($, expanded, now => (now === which ? null : which)),
+    foldLists: () => void update($, expanded, () => null),
+    scrollList: (prefix, at) => void update($, scroll, all => ({ ...all, [prefix]: at })),
+  }
+}
 
 // ── Git through the host ─────────────────────────────────────────────────
 
@@ -106,13 +188,6 @@ function messageOf(cause: unknown): string {
 }
 
 // ── Loading ──────────────────────────────────────────────────────────────
-
-/**
- * How much to load again: `repo` re-reads worktrees and commits (open,
- * refresh, another worktree); `commit` the changed files; `content` the code
- * area alone (another file or view).
- */
-type Depth = 'repo' | 'commit' | 'content'
 
 async function contentFor(repo: Repo, cwd: string, commit: Commit, file: ChangedFile, mode: ViewMode): Promise<Content> {
   if (mode === 'after') return repo.after(cwd, commit, file)
@@ -206,16 +281,23 @@ function rangeRef(ranges: Ranges, mode: RangeMode): string | null {
   return null
 }
 
+// ── Refreshing ───────────────────────────────────────────────────────────
+
 async function isPaneOpen($: EngineInterface): Promise<boolean> {
   return (await $.ui.panes()).some(pane => pane.id === PANE)
 }
 
 function scheduleRefresh($: EngineInterface) {
-  refreshTimer?.cancel()
+  cancelRefresh()
   refreshTimer = $.clock.after(REFRESH_DELAY_MS, () => {
     refreshTimer = null
     void refreshIfOpen($)
   })
+}
+
+function cancelRefresh() {
+  refreshTimer?.cancel()
+  refreshTimer = null
 }
 
 async function refreshIfOpen($: EngineInterface) {
@@ -241,540 +323,3 @@ async function stepFile($: EngineInterface, delta: 1 | -1) {
   if (at < 0 || !target) return
   await load($, 'content', { file: target.path })
 }
-
-// ── Labels ───────────────────────────────────────────────────────────────
-
-function clip(text: string, width: number): string {
-  const room = Math.max(8, width)
-  return text.length <= room ? text : `${text.slice(0, room - 1)}…`
-}
-
-function baseName(path: string): string {
-  return path.replace(/\/+$/, '').split('/').pop() ?? path
-}
-
-function worktreeLabel(wt: Worktree): string {
-  const ref = wt.branch ?? `detached @ ${wt.head.slice(0, 7)}`
-  return `${ref}  ·  ${baseName(wt.path)}${wt.isLocked ? '  (locked)' : ''}`
-}
-
-function commitLabel(commit: Commit): string {
-  return `${commit.shortSha}  ${commit.subject}`
-}
-
-// ── The hooks ────────────────────────────────────────────────────────────
-
-export const register: Register = on => {
-  on('session.start', async ($, e, next) => {
-    sessionCwd = e.cwd
-    await update($, about, () => ({ pluginVersion: null, engineVersion: null, cwd: e.cwd }))
-    void aboutHere($, e.cwd).then(found => update($, about, () => found))
-    // Named after the plugin. (/review is refused: it is an alias of the built-in /code-review.)
-    try {
-      await $.command.register({
-        name: 'commit-walk',
-        description: 'Open or close the commit walk pane: worktrees, commits and files of this repository',
-        argumentHint: '[refresh|close|debug]',
-        immediate: true,
-      })
-    } catch (cause) {
-      $.ui.log(`commit-walk: /commit-walk is unavailable: ${messageOf(cause)}`)
-    }
-    return next(e)
-  })
-
-  on('command.run', { command: 'commit-walk' }, async ($, e) => {
-    const arg = e.args.trim()
-    const isOpen = await isPaneOpen($)
-    if (arg === 'close' || (arg === '' && isOpen)) {
-      refreshTimer?.cancel()
-      refreshTimer = null
-      await $.ui.close({ id: PANE })
-      return { text: 'Commit walk closed.' }
-    }
-    if (arg === 'debug') {
-      const isOn = !(await read($, debugOn))
-      await update($, debugOn, () => isOn)
-      if (!isOpen) {
-        await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true, columns: PANE_COLUMNS })
-        await load($, 'repo')
-      }
-      return { text: `Commit walk debug section ${isOn ? 'shown' : 'hidden'}.` }
-    }
-    if (arg !== '' && arg !== 'refresh') return { text: 'Usage: /commit-walk [refresh|close|debug]' }
-
-    // Open first so the pane shows its loading line, then answer once it has loaded.
-    const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true, columns: PANE_COLUMNS })
-    await load($, 'repo')
-    if (!opened.isPlaced) return { text: `Commit walk is open but not drawn yet: ${opened.reason}` }
-    return { text: arg === 'refresh' ? 'Commit walk refreshed.' : 'Commit walk opened.' }
-  })
-
-  on('ui.close', { id: PANE }, async ($, e, next) => {
-    refreshTimer?.cancel()
-    refreshTimer = null
-    return next(e)
-  })
-
-  on('tool.call', { tool: WRITING_TOOLS }, async ($, e, next) => {
-    const result = await next(e)
-    if (!result.deny && result.isError !== true && result.isReadOnly !== true) scheduleRefresh($)
-    return result
-  })
-
-  on('turn.complete', async ($, e, next) => {
-    const result = await next(e)
-    scheduleRefresh($)
-    return result
-  })
-
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const table = $.ui.resolve(e)
-    const { Box, Text, Button, Code } = table
-    const sel = await read($, selection)
-    const snap = await read($, snapshot)
-    const open = await read($, expanded)
-    const isDebug = await read($, debugOn)
-    const scrolled = await read($, scroll)
-    const gitRuns = isDebug ? await read($, trace) : []
-    const where = isDebug ? await read($, about) : null
-    const width = Math.max(24, e.props.bodyColumns)
-
-    // The sunflower over a commit line, centred: the largest that fits the pane
-    // with room for the message under it, else a one-line mark.
-    const rows = e.props.scroll.bodyRows
-    const centred = (source: Art, row: number, key: string) => (
-      <Text key={key} wrap="truncate-end">
-        {' '.repeat(Math.max(0, Math.floor((width - source.width) / 2)))}
-        {artRuns(source, row).map((run, i) =>
-          run.tone === null && run.color === undefined ? (
-            run.text
-          ) : (
-            <Text key={`r${i}`} color={run.color ?? (run.tone ? TONE_COLOR[run.tone] : undefined)} dimColor={run.tone ? DIM_TONES.has(run.tone) : false}>
-              {run.text}
-            </Text>
-          ),
-        )}
-      </Text>
-    )
-    let artTier: string | null = null
-
-    // What the debug section shows: where the pane runs, what it holds, the
-    // last git commands. Drawn at the bottom of every screen while it is on.
-    const debugButton = (
-      <Button key="debug" hotkey="x" dimColor onPress={() => void update($, debugOn, now => !now)}>
-        {isDebug ? 'Hide debug' : 'Debug'}
-      </Button>
-    )
-    const debugSection = () => {
-      if (!isDebug || where === null) return null
-      const line = (text: string, key: string) => <Text key={key} dimColor wrap="truncate-end">{text}</Text>
-      const counts = `${snap.worktrees.length} worktrees · ${snap.commits.length} commits · ${snap.files.length} files`
-      const age = snap.loadedAt === null ? 'never loaded' : `loaded ${Math.round((Date.now() - snap.loadedAt) / 1000)}s ago`
-      return (
-        <Box flexDirection="column" borderStyle="single" borderDimColor>
-          <Text bold dimColor>Debug</Text>
-          {line(`commit-walk ${where.pluginVersion ?? '?'} · Claude Code ${where.engineVersion ?? 'unknown (before 2.1.300)'} · ${e.surface}`, 'd-versions')}
-          {line(`pane ${e.props.bodyColumns}×${rows} ${e.props.placement}${artTier ? ` · welcome art: ${artTier}` : ''}`, 'd-pane')}
-          {line(`cwd ${where.cwd}`, 'd-cwd')}
-          {line(`repo ${snap.repoRoot ?? 'none'}`, 'd-repo')}
-          {line(`worktree ${sel.worktree ?? '-'} · commit ${sel.commit?.slice(0, 7) ?? '-'} · file ${sel.file ?? '-'}`, 'd-sel')}
-          {line(`view ${sel.mode} · ${sel.isFollowing ? 'following' : 'pinned'} · open list ${open ?? 'none'}`, 'd-view')}
-          {line(`range shown ${snap.range} · preferred ${sel.range}`, 'd-range')}
-          {line(`${counts} · ${age}${snap.isLoading ? ' · loading' : ''}`, 'd-counts')}
-          {snap.error ? <Text key="d-error" color="red" wrap="truncate-end">error {snap.error}</Text> : null}
-          {line(gitRuns.length === 0 ? 'git: nothing run yet' : `git, last ${gitRuns.length}, newest last:`, 'd-git')}
-          {gitRuns.map((run, i) => (
-            <Text key={`d-git-${i}`} color={run.exitCode === 0 ? undefined : 'red'} dimColor={run.exitCode === 0} wrap="truncate-end">
-              {`  ${String(run.exitCode).padStart(3)} ${String(run.ms).padStart(5)}ms  ${run.args}${run.error ? `  · ${run.error}` : ''}`}
-            </Text>
-          ))}
-        </Box>
-      )
-    }
-
-    const welcome = () => {
-      const fits = (art: Art, roomBelow: number) => width >= art.width + 2 && rows >= art.rows.length + roomBelow
-      // The small one needs a single spare column, so it fits even the narrowest (24-column) pane.
-      const source = fits(LARGE, 10) ? LARGE : fits(MEDIUM, 10) ? MEDIUM : width >= SMALL.width + 1 ? SMALL : null
-      artTier = source === LARGE ? 'large' : source === MEDIUM ? 'medium' : source === SMALL ? 'small' : 'one-line mark'
-      if (source === null) {
-        return (
-          <Text bold color={TONE_COLOR.leaf}>
-            <Text color={TONE_COLOR.petal}>✿</Text> Commit Walk
-          </Text>
-        )
-      }
-      const title = 'Commit Walk'
-      return (
-        <Box flexDirection="column">
-          {source.rows.map((_, row) => centred(source, row, `art-${row}`))}
-          {centred(source === SMALL ? SMALL_LINE : COMMIT_LINE, 0, 'art-line')}
-          <Text> </Text>
-          <Text bold color={TONE_COLOR.leaf}>
-            {' '.repeat(Math.max(0, Math.floor((width - title.length) / 2)))}
-            {title}
-          </Text>
-        </Box>
-      )
-    }
-
-    if (snap.repoRoot === null && snap.error) {
-      return (
-        <Box flexDirection="column" gap={1}>
-          {welcome()}
-          <Text bold>No repository to review</Text>
-          <Text color="red">{snap.error}</Text>
-          <Text dimColor>Start Claude Code inside a Git repository, then run /commit-walk.</Text>
-          <Box flexDirection="row" gap={1}>
-            <Button key="refresh" hotkey="r" onPress={() => void load($, 'repo')}>Try again</Button>
-            {debugButton}
-          </Box>
-          {debugSection()}
-        </Box>
-      )
-    }
-    if (snap.repoRoot === null) {
-      return (
-        <Box flexDirection="column" gap={1}>
-          {welcome()}
-          <Text dimColor>Reading the repository…</Text>
-          {debugSection()}
-        </Box>
-      )
-    }
-
-    const worktree = snap.worktrees.find(wt => wt.path === sel.worktree)
-    const commitAt = snap.commits.findIndex(one => one.sha === sel.commit)
-    const commit = snap.commits[commitAt]
-    const fileAt = snap.files.findIndex(one => one.path === sel.file)
-    const file = snap.files[fileAt]
-    const content = snap.content
-
-    const mode = (key: ViewMode, label: string, hotkey: string) => (
-      <Button
-        key={`mode-${key}`}
-        hotkey={hotkey}
-        variant={sel.mode === key ? 'primary' : undefined}
-        onPress={() => void load($, 'content', { mode: key })}
-      >
-        {label}
-      </Button>
-    )
-
-    // Lists are whole-row buttons: the full width of a row is the click target.
-    // Inside a rounded frame, so a row is the frame's inner width.
-    const inner = Math.max(10, width - 2)
-    const pad = (text: string, room = inner) => text.padEnd(room).slice(0, room)
-
-    /**
-     * The full text of a clipped row, revealed while the pointer is over the
-     * row (its keyed Box): drawn below it, over the rows that follow, without
-     * moving them. Inverse video makes it a solid block in any theme. Claude
-     * Code shows it where the terminal reports the pointer; no hook runs.
-     */
-    const hoverCard = (key: string, full: string, indent: number) => {
-      const cardWidth = Math.max(10, inner - indent - 1)
-      const lines: string[] = []
-      for (let at = 0; at < full.length; at += cardWidth - 2) lines.push(full.slice(at, at + cardWidth - 2))
-      return (
-        // No key: a keyed Box would scope the hover to itself, hidden and never hovered. The row's keyed Box is the scope.
-        <Box position="absolute" top={1} left={indent} display="none" hover={{ display: 'flex' }} flexDirection="column">
-          {lines.map((line, i) => (
-            <Text key={`${key}-${i}`} inverse>{` ${line.padEnd(cardWidth - 2)} `}</Text>
-          ))}
-        </Box>
-      )
-    }
-
-    /**
-     * The rows of a list, LIST_ROWS at a time. Each row: a ▶ on the selected
-     * one, an optional coloured tag, the entry's text as a whole-row button.
-     * A longer list gets a scroll column on the right: ▲ and ▼ page through it
-     * without changing the selection, and a thumb shows where the rows are.
-     */
-    const rowList = <T,>(spec: {
-      prefix: string
-      items: readonly T[]
-      at: number
-      keyOf: (item: T) => string
-      tagOf?: (item: T) => { text: string; color: string | undefined }
-      textOf: (item: T) => string
-      noun: { one: string; many: string }
-      onPick: (item: T) => void
-    }) => {
-      const total = spec.items.length
-      const size = Math.min(LIST_ROWS, total)
-      const selectedKey = spec.items[spec.at] === undefined ? null : spec.keyOf(spec.items[spec.at] as T)
-      const start = scrollStart(total, spec.at, LIST_ROWS, scrolled[spec.prefix], selectedKey)
-      const shown = spec.items.slice(start, start + size)
-      const hasBar = total > LIST_ROWS
-      const room = hasBar ? inner - 2 : inner
-      const last = total - LIST_ROWS
-      const scrollTo = (to: number) =>
-        void update($, scroll, all => ({ ...all, [spec.prefix]: { start: Math.min(Math.max(to, 0), last), anchor: selectedKey } }))
-
-      const rows = shown.map((item, i) => {
-        const isSelected = start + i === spec.at
-        const tag = spec.tagOf?.(item)
-        const used = 2 + (tag ? tag.text.length + 2 : 0)
-        const full = spec.textOf(item)
-        const isClipped = full.length > room - used - 1
-        return (
-          // The marker and the coloured tag are text in front of the button,
-          // which holds one string: Claude Code before 2.1.300 refuses a
-          // Button with element children.
-          <Box key={`${spec.prefix}-row:${spec.keyOf(item)}`} flexDirection="row">
-            <Text color={isSelected ? TONE_COLOR.petal : undefined} bold={isSelected}>{isSelected ? '▶ ' : '  '}</Text>
-            {tag ? <Text color={tag.color}>{tag.text}  </Text> : null}
-            <Button key={`${spec.prefix}:${spec.keyOf(item)}`} plain onPress={() => spec.onPick(item)}>
-              {pad(clip(full, room - used - 1), room - used)}
-            </Button>
-            {isClipped ? hoverCard(`${spec.prefix}-card:${spec.keyOf(item)}`, full, used) : null}
-          </Box>
-        )
-      })
-      if (!hasBar) return <Box flexDirection="column">{rows}</Box>
-
-      // The scroll column: ▲, a track with the thumb, ▼; one cell per row.
-      const track = size - 2
-      const thumb = Math.max(1, Math.round((track * size) / total))
-      const thumbAt = last === 0 ? 0 : Math.round(((track - thumb) * start) / last)
-      const atTop = start === 0
-      const atEnd = start >= last
-      return (
-        <Box flexDirection="column">
-          <Box flexDirection="row">
-            <Box flexDirection="column">{rows}</Box>
-            <Text> </Text>
-            <Box flexDirection="column">
-              <Button key={`${spec.prefix}-up`} plain dimColor={atTop} onPress={() => scrollTo(start - (LIST_ROWS - 1))}>▲</Button>
-              {Array.from({ length: track }, (_, i) => (
-                <Text key={`${spec.prefix}-track-${i}`} dimColor={i < thumbAt || i >= thumbAt + thumb}>
-                  {i >= thumbAt && i < thumbAt + thumb ? '┃' : '│'}
-                </Text>
-              ))}
-              <Button key={`${spec.prefix}-down`} plain dimColor={atEnd} onPress={() => scrollTo(start + (LIST_ROWS - 1))}>▼</Button>
-            </Box>
-          </Box>
-          <Text dimColor wrap="truncate-end">{`  ${start + 1}–${start + size} of ${total} ${spec.noun.many} · ▲ ▼ scroll`}</Text>
-        </Box>
-      )
-    }
-
-    /**
-     * A list folded into one framed row showing the current entry: a press on
-     * the row opens it below, another press or a pick folds it again.
-     */
-    const foldable = <T,>(spec: Parameters<typeof rowList<T>>[0] & { which: Expandable; label: string; current: string }) => {
-      const isOpen = open === spec.which
-      const head = pad(`${spec.label}${clip(spec.current, inner - spec.label.length - 3)}`, inner - 2)
-      return (
-        <Box flexDirection="column" borderStyle="round" borderDimColor>
-          <Button key={`${spec.which}-toggle`} plain onPress={() => void update($, expanded, now => (now === spec.which ? null : spec.which))}>
-            {`${head}${isOpen ? ' ▴' : ' ▾'}`}
-          </Button>
-          {isOpen
-            ? rowList({
-                ...spec,
-                onPick: item => {
-                  void update($, expanded, () => null)
-                  spec.onPick(item)
-                },
-              })
-            : null}
-        </Box>
-      )
-    }
-
-    const fileName = (one: ChangedFile) => (one.oldPath && one.oldPath !== one.path ? `${one.oldPath} → ${one.path}` : one.path)
-    const fileText = (one: ChangedFile) => `${fileName(one)}  ${one.isBinary ? 'binary' : `+${one.added} −${one.deleted}`}`
-
-    const header = (
-      <Box flexDirection="column">
-        <Box flexDirection="row" gap={1}>
-          <Text bold>
-            <Text color={TONE_COLOR.petal}>✿</Text> {clip(baseName(snap.repoRoot), width - 16)}
-          </Text>
-          <Button key="refresh" hotkey="r" onPress={() => void load($, 'repo')}>Refresh</Button>
-          {debugButton}
-        </Box>
-        <Text dimColor wrap="truncate-end">{snap.isLoading ? 'Loading…' : sel.isFollowing ? 'Following the newest commit' : 'Pinned to a past commit'}</Text>
-        {snap.error ? <Text color="red">{snap.error}</Text> : null}
-      </Box>
-    )
-
-    // Which commits the list starts from: every option the worktree offers, one
-    // button each, the chosen one primary. Hidden where only the whole history is on offer.
-    const rangeOptions: { mode: RangeMode; label: string }[] = [
-      { mode: 'all', label: 'all' },
-      ...(snap.ranges.notInDefault ? [{ mode: 'notInDefault' as const, label: `not in ${snap.ranges.notInDefault.ref} · ${snap.ranges.notInDefault.count}` }] : []),
-      ...(snap.ranges.base ? [{ mode: 'base' as const, label: `since ${snap.ranges.base.ref} · ${snap.ranges.base.count}` }] : []),
-    ]
-    // `h` cycles through them: it sits on the option after the chosen one.
-    // Switching keeps the selected commit when the new range has it.
-    const nextRange = rangeOptions[(rangeOptions.findIndex(option => option.mode === snap.range) + 1) % rangeOptions.length]?.mode
-    const rangeRow =
-      rangeOptions.length < 2 ? null : (
-        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
-          <Text dimColor>Commits  </Text>
-          {rangeOptions.map(option => (
-            <Button
-              key={`range-${option.mode}`}
-              {...(option.mode === nextRange ? { hotkey: 'h' } : {})}
-              variant={snap.range === option.mode ? 'primary' : undefined}
-              dimColor={snap.range !== option.mode}
-              onPress={() => void load($, 'commit', { range: option.mode })}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </Box>
-      )
-
-    const worktreeAt = snap.worktrees.findIndex(wt => wt.path === worktree?.path)
-    const worktreePicker = foldable({
-      which: 'worktree',
-      prefix: 'worktree',
-      label: 'Worktree  ',
-      current: worktree ? worktreeLabel(worktree) : 'none',
-      items: snap.worktrees,
-      at: worktreeAt,
-      keyOf: wt => wt.path,
-      textOf: worktreeLabel,
-      noun: { one: 'worktree', many: 'worktrees' },
-      onPick: wt => void load($, 'repo', { worktree: wt.path, commit: null, file: null }),
-    })
-
-    // A worktree with no commits yet: the welcome art, until the first one lands.
-    // Nothing to walk: the welcome art, until a commit lands. Under "not in
-    // default" that is the default branch itself (no work happens there) or a
-    // branch level with it; otherwise a worktree with no commits at all.
-    if (snap.commits.length === 0) {
-      const where = worktree?.branch ?? 'this worktree'
-      const defaultRef = snap.ranges.notInDefault?.ref ?? 'the default branch'
-      const isNotInDefault = snap.range === 'notInDefault'
-      const showAll = (
-        <Box>
-          <Button key="show-all" onPress={() => void load($, 'commit', { range: 'all', commit: null, file: null })}>
-            Show all commits
-          </Button>
-        </Box>
-      )
-      return (
-        <Box flexDirection="column" gap={1}>
-          {header}
-          {debugSection()}
-          {worktreePicker}
-          {rangeRow}
-          {welcome()}
-          {isNotInDefault && snap.ranges.isOnDefault ? (
-            <Box flexDirection="column" gap={1}>
-              <Text>You're on {where}. Work happens on branches, so there is nothing new to walk here.</Text>
-              <Text dimColor>Pick a worktree above, or show the whole history.</Text>
-              {showAll}
-            </Box>
-          ) : isNotInDefault ? (
-            <Box flexDirection="column" gap={1}>
-              <Text>No commits on {where} beyond {defaultRef} yet.</Text>
-              <Text dimColor>The pane follows the first one as soon as it lands. Press r to look again.</Text>
-              {showAll}
-            </Box>
-          ) : (
-            <Box flexDirection="column">
-              <Text>No commits on {where} yet.</Text>
-              <Text dimColor>The pane follows the first one as soon as it lands. Press r to look again.</Text>
-            </Box>
-          )}
-        </Box>
-      )
-    }
-
-    // The debug section sits under the header here: below the diff it would be off screen.
-    return (
-      <Box flexDirection="column" gap={1}>
-        {header}
-        {debugSection()}
-        {worktreePicker}
-
-        <Box flexDirection="column">
-          {rangeRow}
-          {foldable({
-            which: 'commit',
-            prefix: 'commit',
-            label: 'Commit    ',
-            current: commit ? commitLabel(commit) : 'none',
-            items: snap.commits,
-            at: commitAt,
-            keyOf: one => one.sha,
-            textOf: commitLabel,
-            noun: { one: 'commit', many: 'commits' },
-            onPick: one => void load($, 'commit', { commit: one.sha, file: null }),
-          })}
-          {commit ? (
-            <Text dimColor wrap="truncate-end">
-              {commit.author} · {commit.when}
-              {commit.parents.length > 1 ? ' · merge, against its first parent' : ''}
-              {commit.parents.length === 0 ? ' · root commit' : ''}
-              {` · ${commitAt + 1} of ${snap.commits.length}`}
-            </Text>
-          ) : null}
-          <Box flexDirection="row" gap={1}>
-            <Button key="older" hotkey="o" dimColor={commitAt >= snap.commits.length - 1} onPress={() => void stepCommit($, 1)}>Older</Button>
-            <Button key="newer" hotkey="n" dimColor={commitAt <= 0} onPress={() => void stepCommit($, -1)}>Newer</Button>
-          </Box>
-        </Box>
-
-        <Box flexDirection="column">
-          <Box flexDirection="row" gap={1}>
-            <Text>Files     </Text>
-            <Button key="prev-file" hotkey="k" dimColor={fileAt <= 0} onPress={() => void stepFile($, -1)}>Prev</Button>
-            <Button key="next-file" hotkey="j" dimColor={fileAt < 0 || fileAt >= snap.files.length - 1} onPress={() => void stepFile($, 1)}>Next</Button>
-            <Text dimColor>{snap.files.length > 0 ? `${fileAt + 1} of ${snap.files.length}` : 'none'}</Text>
-          </Box>
-          <Box flexDirection="column" borderStyle="round" borderDimColor>
-            {rowList({
-              prefix: 'file',
-              items: snap.files,
-              at: fileAt,
-              keyOf: one => one.path,
-              tagOf: one => ({ text: one.status, color: STATUS_COLOR[one.status] }),
-              textOf: fileText,
-              noun: { one: 'file', many: 'files' },
-              onPick: one => void load($, 'content', { file: one.path }),
-            })}
-          </Box>
-          {file && fileText(file).length > inner - (snap.files.length > LIST_ROWS ? 2 : 0) - 6 ? (
-            // The selected file's whole name when its row is cut: renames and deep paths, for every surface and the keyboard.
-            <Text dimColor wrap="wrap">{`▶ ${fileName(file)}`}</Text>
-          ) : null}
-        </Box>
-
-        <Box flexDirection="row" gap={1}>
-          {mode('diff', 'Diff', 'd')}
-          {mode('after', 'After', 'a')}
-          {mode('before', 'Before', 'b')}
-        </Box>
-
-        {content === null ? null : content.kind === 'note' ? (
-          <Text dimColor>{content.text}</Text>
-        ) : (
-          <Box flexDirection="column">
-            {content.kind === 'diff' && content.context === 'near' ? (
-              <Text dimColor>Too large for the whole file: showing the changes with 20 lines of context.</Text>
-            ) : null}
-            {content.kind === 'diff' ? (
-              <Code source={content.source} format="diff" path={file?.path} />
-            ) : (
-              <Code source={content.source} path={content.path} startLine={1} />
-            )}
-            {content.isTruncated ? <Text dimColor>Cut here to fit the pane; open the file to read the rest.</Text> : null}
-          </Box>
-        )}
-
-        <Text dimColor wrap="truncate-end">keys: o/n commit · k/j file · d/a/b view · h range · r refresh · x debug · Esc close</Text>
-      </Box>
-    )
-  })
-}
-
