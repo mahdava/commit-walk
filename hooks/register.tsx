@@ -12,7 +12,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { About, ChangedFile, Commit, Content, Expandable, GitTrace, RangeMode, Ranges, Selection, Snapshot, ViewMode, Worktree } from '../types'
 import { createRepo, type GitRun, type Repo } from './git'
-import { COMMIT_LINE, DIM_TONES, LARGE, MEDIUM, SMALL, TONE_COLOR, artRuns, type Art } from './welcome'
+import { COMMIT_LINE, DIM_TONES, LARGE, MEDIUM, SMALL, SMALL_LINE, TONE_COLOR, artRuns, type Art } from './welcome'
 import { scrollStart, type ListScroll } from './window'
 
 const PANE = 'commit-walk'
@@ -409,7 +409,7 @@ export const register: Register = on => {
       return (
         <Box flexDirection="column">
           {source.rows.map((_, row) => centred(source, row, `art-${row}`))}
-          {source === SMALL ? null : centred(COMMIT_LINE, 0, 'art-line')}
+          {centred(source === SMALL ? SMALL_LINE : COMMIT_LINE, 0, 'art-line')}
           <Text> </Text>
           <Text bold color={TONE_COLOR.leaf}>
             {' '.repeat(Math.max(0, Math.floor((width - title.length) / 2)))}

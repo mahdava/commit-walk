@@ -181,6 +181,9 @@ export const MEDIUM = art([
   "           hhhhhhh             h"
 ])
 
+/** The commit line under the small sunflower: the same four commits on a 22-column track. */
+export const SMALL_LINE = art(["●━━━━━━●━━━━━━●━━━━━━●"], ["BddddddGddddddYddddddR"])
+
 /** Lucia's small sunflower, 23 × 11, made in the ASCII Fantasy Map Builder: each character in its palette colour. */
 export const SMALL = art(
 [

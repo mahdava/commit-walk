@@ -356,16 +356,18 @@ test('the welcome art is sized to the pane: large, medium, or the small sunflowe
   await medium.unmount()
 
   const small = await mountAt(84, 25)
-  expect((await welcomeOf(small)).children?.length).toBe(11 + 2)
+  expect((await welcomeOf(small)).children?.length).toBe(11 + 3)
   // Lucia's small sunflower keeps her map builder palette, colour by character.
   const drawn = JSON.stringify(await small.drawn())
   for (const color of ['#c49a03', '#421e05', '#2d6d2d', '#f05151', '#0f5106', '#ffffff']) expect(drawn).toContain(`"color":"${color}"`)
   expect(drawn).not.toContain(';')
+  expect(drawn).toContain('━━━━━━')
+  for (const color of ['#3B82F6', '#2EA043', '#F5B800', '#EF4444']) expect(drawn).toContain(`"color":"${color}"`)
   await small.unmount()
 
   // The pane is never narrower than 24 columns, so the 18-column small sunflower always fits.
   const narrow = await mountAt(18, 60)
-  expect((await welcomeOf(narrow)).children?.length).toBe(11 + 2)
+  expect((await welcomeOf(narrow)).children?.length).toBe(11 + 3)
   await narrow.unmount()
 })
 
