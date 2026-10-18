@@ -61,5 +61,5 @@ keyboard back to it.
 
 ## Credits
 
-- The logo's lettering is set in [SuperTrend](https://nhfonts.gumroad.com/l/super-trend-font) by [NHFonts](https://nhfonts.gumroad.com/).
+- The logo's lettering is from the [SuperTrend](https://nhfonts.gumroad.com/l/super-trend-font) font by [NHFonts](https://nhfonts.gumroad.com/).
 - The welcome screen's ASCII sunflowers started as the logo run through [Image to ASCII](https://www.asciiart.eu/image-to-ascii) on asciiart.eu, then were redrawn and recoloured by hand by Lucia.
