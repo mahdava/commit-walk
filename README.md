@@ -1,6 +1,6 @@
 # commit-walk
 
-<p align="center"><img src="assets/logo.png" alt="Commit Walk: a sunflower in green sneakers walking along a line of commits" width="320"></p>
+<p align="center"><img src="assets/commit-walk-logo-outlined.svg" alt="Commit Walk: a sunflower in green sneakers walking a line of four commits lettered W, A, L and K" width="480"></p>
 
 A Claude Code pane for walking a Git repository worktree by worktree and
 commit by commit. Pick a worktree, a commit and one of its changed files.
@@ -392,7 +392,9 @@ Code's own plugin environment, with no Node APIs.
 | `tests/pane.test.tsx` | Pane tests on the terminal, desktop and mobile surfaces |
 | `.claude-plugin/plugin.json` | The manifest |
 | `.claude-plugin/marketplace.json` | Makes the repository its own marketplace |
-| `assets/logo.png` | The logo |
+| `assets/commit-walk-logo.svg` | The logo |
+| `assets/commit-walk-logo-outlined.svg` | The logo with a white outline, for dark backgrounds; the README shows it |
+| `assets/logo.png` | The first logo, as a PNG |
 
 Checks:
 
