@@ -35,6 +35,7 @@ Two rules of that environment shape how the code is split:
 | `tests/walk.test.tsx`, `lists.test.tsx`, `ranges.test.tsx`, `welcome.test.tsx`, `debug.test.tsx` | Pane tests by feature, on the terminal, desktop and mobile surfaces |
 | `tests/git.test.ts` | Parser and fitting tests |
 | `tests/window.test.ts` | List window tests |
+| `LICENSE` | MIT for the code and documentation; the artwork stays © Lucia Nazzaro |
 | `THIRD-PARTY-NOTICES.md`, `LICENSES/` | What is others' work, and their licences in full |
 | `.claude-plugin/plugin.json` | The manifest |
 | `.claude-plugin/marketplace.json` | Makes the repository its own marketplace |

@@ -2,10 +2,11 @@
 
 ## <picture><img src="assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> What is Commit Walk?
 
-Commit Walk is a Claude Code mod: a plugin that adds a pane to your Claude
-Code session for walking a Git repository worktree by worktree and commit by
-commit. Pick a worktree, a commit and one of its changed files, then read the
-file as a diff, or as the whole file after or before the commit.
+Commit Walk is a Claude Code mod, a plugin that runs inside Claude Code and
+draws its own pane, for walking a Git repository worktree by worktree and
+commit by commit. Pick a worktree, a commit and one of its changed files,
+then read the file as a diff, or as the whole file after or before the
+commit.
 
 It is built for watching an agent's work as it lands. The pane follows new
 commits while Claude edits, and it can step back through history without
@@ -87,3 +88,11 @@ keyboard back to it.
 - The 🌻 before each heading is the sunflower from [Noto Emoji](https://github.com/googlefonts/noto-emoji), under the Apache License 2.0.
 
 The terms for the font and the sunflower emoji, with the licence texts in full, are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+## <picture><img src="assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> License
+
+The code and documentation are under the [MIT License](LICENSE). The logos,
+the keyboard picture and the sunflower drawings are © Lucia Nazzaro, all
+rights reserved; [LICENSE](LICENSE) says what that covers and allows.
+Third-party work keeps its own licence, as
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) lists.
