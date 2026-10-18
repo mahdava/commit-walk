@@ -2,6 +2,10 @@
 
 # <picture><img src="../assets/sunflower-emoji.svg" alt="" width="28" height="28" align="top"></picture> Using Commit Walk
 
+This guide covers everything the pane does once it is open: the commands
+that open and close it, each part of the pane from top to bottom, how it
+follows new commits, and its limits.
+
 ## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> Commands
 
 Start Claude Code inside a Git repository, then run `/commit-walk`.

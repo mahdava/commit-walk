@@ -2,6 +2,10 @@
 
 # <picture><img src="../assets/sunflower-emoji.svg" alt="" width="28" height="28" align="top"></picture> Troubleshooting Commit Walk
 
+When the pane looks empty, wrong or stuck, start here. This page lists
+exactly what the plugin runs, shows how to read its debug section, and goes
+through the problems seen so far with their fixes.
+
 ## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> What it runs
 
 Only these git commands, through Claude Code's process runner, in the

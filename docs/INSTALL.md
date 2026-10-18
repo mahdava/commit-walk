@@ -2,6 +2,10 @@
 
 # <picture><img src="../assets/sunflower-emoji.svg" alt="" width="28" height="28" align="top"></picture> Installing Commit Walk
 
+This page covers what Commit Walk needs, and every way to install, update
+and remove it: from a Claude Code session, from a shell, or from the
+desktop app.
+
 ## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> Requirements
 
 | What | Version |
