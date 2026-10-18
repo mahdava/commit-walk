@@ -3,6 +3,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
+import { GROUPS, KEYS } from '../art/keys.mjs'
 // Playwright is not a dependency of the mod: PLAYWRIGHT_FROM names any folder whose node_modules holds it.
 const require = createRequire(join(process.env.PLAYWRIGHT_FROM ?? process.cwd(), 'package.json'))
 const { chromium } = require('playwright')
@@ -86,7 +87,13 @@ if (act.pointer) {
   if (act.ring) overlay += `<div class="ring" style="${at}"></div>`
   overlay += `<svg class="ptr" style="${at}" width="26" height="32" viewBox="-2 -2 22 30"><path d="M0 0 L0 22 L6 16.5 L10 25.5 L14 23.5 L10 15 L17 15 Z" fill="#fecd22" stroke="#3e1800" stroke-width="1.8" stroke-linejoin="round"/></svg>`
 }
-if (act.key) overlay += `<div class="keyhint"><span class="cap">${esc(act.key)}</span>${act.label ? `<span class="what">${esc(act.label)}</span>` : ''}</div>`
+if (act.key) {
+  // The keycap in the key's colour and words from the keyboard illustration; a frame may say otherwise.
+  const known = KEYS[act.key] ?? {}
+  const { color, ink } = GROUPS[known.group ?? 'commit']
+  const label = act.label ?? known.label?.replace('\n', ' ')
+  overlay += `<div class="keyhint"><span class="cap" style="background:${color};color:${ink}">${esc(act.key)}</span>${label ? `<span class="what" style="background:${color};color:${ink}">${esc(label)}</span>` : ''}</div>`
+}
 return `<!doctype html><meta charset="utf-8"><style>
 @font-face{font-family:Sym;src:url(${process.env.SYMBOL_FONT ? 'file://' + process.env.SYMBOL_FONT : 'seguisym.ttf'})}
 html,body{background:${process.env.BACKDROP ?? 'transparent'}}
@@ -102,8 +109,8 @@ pre div{height:15px}
 .ptr{position:absolute;margin:-2px 0 0 -2px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.55))}
 .ring{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:3px solid #fecd22;background:rgba(254,205,34,.22);box-sizing:border-box}
 .keyhint{position:absolute;right:26px;bottom:78px;display:flex;align-items:center;gap:10px;font:600 15px system-ui,sans-serif}
-.cap{min-width:38px;height:38px;padding:0 10px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:9px;background:#fecd22;color:#3e1800;font:800 19px "DejaVu Sans Mono",monospace;box-shadow:0 4px 0 #b88a00,0 6px 14px rgba(0,0,0,.5)}
-.what{padding:7px 12px;border-radius:999px;background:rgba(20,10,0,.82);color:#fecd22;border:1px solid rgba(254,205,34,.5)}
+.cap{min-width:38px;height:38px;padding:0 10px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:9px;font:800 19px "DejaVu Sans Mono",monospace;box-shadow:inset 0 -4px 0 rgba(0,0,0,.28),0 6px 14px rgba(0,0,0,.5)}
+.what{padding:7px 14px;border-radius:999px;font-weight:700;box-shadow:0 6px 14px rgba(0,0,0,.5)}
 </style><div class="win"><div class="bar"><div class="dot" style="background:#ff5f57"></div><div class="dot" style="background:#febc2e"></div><div class="dot" style="background:#28c840"></div><div class="t">${esc(title)}</div></div><pre>${rows.map(r => `<div>${r}</div>`).join('')}</pre><div class="fx">${overlay}</div></div>`
 
 }

@@ -11,301 +11,50 @@ leaving the session.
 Everything comes from git and is only read. The plugin gives the model no
 tool, writes nothing to the repository and makes no network requests.
 
-<p align="center"><img src="assets/commit-walk-demo.gif" alt="Commit Walk in a Claude Code session: the pane opens on a feature branch, steps through files and older commits with keys shown as yellow keycaps, switches between Diff, After and Before, then a yellow pointer unfolds the commit list, picks a commit and switches the range to all commits" width="900"></p>
+<p align="center"><img src="assets/commit-walk-demo.gif" alt="Commit Walk in a Claude Code session: the pane opens on a feature branch, steps through files and older commits, switches between file diff, after and before, then a yellow pointer unfolds the commit list, picks a commit and switches the range to all commits, and h switches it back; each pressed key shows as a keycap in the keyboard picture's colours" width="900"></p>
 
-<p align="center"><sub>A walk through a demo branch, recorded in a real session. The yellow pointer and keycaps show what is clicked and pressed (<a href="assets/commit-walk-demo.mp4">MP4</a>).</sub></p>
-
-## Contents
-
-- [Requirements](#requirements)
-- [Install](#install)
-- [Use](#use)
-- [What the pane shows](#what-the-pane-shows)
-- [How it behaves](#how-it-behaves)
-- [Limits](#limits)
-- [What it runs](#what-it-runs)
-- [Troubleshooting](#troubleshooting)
-- [Develop](#develop)
-
-## Requirements
-
-| What | Version |
-| --- | --- |
-| Claude Code | 2.1.292 or later, for the mods API. Tested on 2.1.292 and 2.1.302. |
-| Git | 2.36 or later, for NUL-separated `git worktree list` output. 2.41 or later for the base-branch range |
-
-It draws the same on the terminal, the desktop app, VS Code and the mobile
-app: every control is a button.
+<p align="center"><sub>A walk through a demo branch, recorded in a real session. The yellow pointer shows what is clicked, and the keycaps what is pressed, in the colours of the keyboard below (<a href="assets/commit-walk-demo.mp4">MP4</a>).</sub></p>
 
 ## Install
-
-The repository is private. Installing needs read access to it on GitHub and
-a git credential for github.com on the machine. That is an SSH key, or
-`gh auth login` followed by `gh auth setup-git`. The install never prompts
-for a credential.
-
-At the prompt of a Claude Code terminal session:
 
 ```
 /plugin install commit-walk --marketplace mahdava/commit-walk
 ```
 
-Or from a shell:
-
-```
-claude plugin install commit-walk --marketplace mahdava/commit-walk
-```
-
-Answer `y` to add the marketplace, then pick the user scope. The plugin is
-active at once in that session, and in every session started afterwards.
-
-In the desktop app, where `/plugin` does not run, click + next to the prompt
-box, then Plugins. Add the marketplace `mahdava/commit-walk`, then add the
-plugin.
-
-To update later:
-
-```
-claude plugin marketplace update commit-walk
-claude plugin update commit-walk@commit-walk
-```
-
-To remove it:
-
-```
-claude plugin uninstall commit-walk@commit-walk
-```
+It needs Claude Code 2.1.292 or later, Git 2.36 or later, and read access to
+this private repository. Installing from a shell or the desktop app,
+updating and removing are in [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Use
 
-Start Claude Code inside a Git repository, then run `/commit-walk`.
+Run `/commit-walk` in a Claude Code session started inside a Git repository.
+It opens the pane, or closes it when it is open. The pane takes the keyboard
+when it opens; later, click it, or press `ctrl+x` then `Tab`, to give the
+keyboard back to it.
 
-| Command | What it does |
-| --- | --- |
-| `/commit-walk` | Opens the pane, or closes it when it is open |
-| `/commit-walk refresh` | Opens the pane if needed and reads the repository again |
-| `/commit-walk close` | Closes the pane |
-| `/commit-walk debug` | Shows or hides the debug section, opening the pane if needed |
+<p align="center"><img src="assets/keyboard.svg" alt="The keys the pane uses, on a keyboard: o older commit, n newer commit, h commit range, j next file, k previous file, d file diff, a file after, b file before, r refresh, x debug, Esc close, Tab next control, Enter press, arrows scroll" width="760"></p>
 
-`/commit-walk` runs at once, even in the middle of a turn. Before 1.3.0 the
-command was `/commits`.
-
-### Keyboard
-
-The pane takes the keyboard when it opens. Later, click it, or press
-`ctrl+x` then `Tab`, to give it the keyboard again. While it has the
-keyboard:
+<details>
+<summary>Keys as a table</summary>
 
 | Key | Action |
 | --- | --- |
-| `Tab` | Moves between the controls |
-| `Enter` | Presses the focused row or button |
-| Arrows | Scroll the pane |
-| `o` / `n` | Older / newer commit |
-| `k` / `j` | Previous / next file |
-| `d` / `a` / `b` | Diff / After / Before |
-| `h` | Next commit range: all, not in main, since the base branch, in turn |
+| `o` / `n` | Older commit / newer commit |
+| `h` | Commit range: all, not in main, since the base branch, in turn |
+| `j` / `k` | Next file / previous file |
+| `d` / `a` / `b` | File diff / file after / file before |
 | `r` | Refresh |
-| `x` | Shows or hides the debug section |
-| `Esc` | Closes the pane |
+| `x` | Debug: shows or hides the debug section |
+| `Esc` | Close the pane |
+| `Tab` | Next control |
+| `Enter` | Press the focused row or button |
+| Arrows | Scroll the pane |
 
-## What the pane shows
+</details>
 
-<p align="center"><img src="assets/screenshots/diff.png" alt="The pane on a feature branch: worktree row, the not-in-main range with 4 commits, the commit 'Grade trails as easy, moderate or hard', its two files with src/index.ts selected, and the coloured diff" width="820"></p>
+## More
 
-From the top down:
-
-1. **The repository's name**, after a ✿, and a Refresh button. Under them, a line says
-   whether the pane follows the newest commit or is pinned to an older one.
-   It shows "Loading…" while git runs, and git's message if a step failed.
-2. **Worktree**, a framed row showing the current worktree: its branch, or
-   "detached @ sha" without one, then its folder name. Click anywhere on the
-   row to unfold the list of every worktree under it. Click the row again,
-   or pick one, to fold it. Locked worktrees are marked. Bare and prunable
-   ones are left out.
-3. **Commits**, a row of buttons choosing which commits the list starts
-   from, shown only when the worktree offers more than its whole history:
-   - **all**: the whole history.
-   - **not in origin/main · 12**: the commits the default branch does not
-     have yet. Offered off the default branch.
-   - **since feat/base · 3**: the commits since the branch this one grew
-     from, for stacked branches. Offered when that base is not the default
-     branch itself.
-
-   **not in** is chosen by default, since work normally happens on
-   branches. On the default branch itself, or on a branch level with it,
-   that range is empty and the pane shows the welcome screen. On the
-   default branch it says so and offers **Show all commits**. On a
-   branch level with it, the pane waits there and moves to the first commit
-   as soon as it lands. `h` moves to the next range the worktree offers,
-   in turn, as does a click on a range. Switching keeps the selected commit
-   when the new range has it, and otherwise moves to that range's newest. A
-   range you pick becomes the choice and follows you across worktrees; where
-   a worktree does not offer it, the list shows all commits.
-
-   The default branch is whatever `origin/HEAD` points at, `master`
-   included. Without `origin/HEAD` it is local `main`, local `master`,
-   `origin/main` or `origin/master`, in that order. The base branch is the
-   nearest other local branch: the one missing the fewest of this branch's
-   commits.
-4. **Commit**, a framed row that unfolds the same way, listing the newest
-   100 commits of the chosen range by short SHA and subject. Under it are
-   the author, the relative date, whether it is a merge or the root commit,
-   and its position, then the Older and Newer buttons.
-5. **Files**, always unfolded: the files the commit changed, with their
-   status letter in colour and their line counts. Renames show as
-   `old → new`, and binary files say "binary". Prev and Next sit above it.
-
-Every list is a frame of whole-row buttons, so a click on a row picks it,
-and the row under the pointer is highlighted. The selected row is marked ▶.
-A list shows 8 rows. A longer one gets a scroll column on its right:
-
-- **▲ and ▼** page through the list 7 rows at a time without changing the
-  selection.
-- **The thumb** in between shows where the visible rows are.
-- **A line under the list** reads "9–16 of 40 files".
-
-A row too long for the pane ends in "…". Hovering it shows its whole line
-in a card just below it, which disappears when the pointer leaves. That
-needs a terminal that reports the pointer, like Claude Code's fullscreen
-mode. When the selected file's row is cut, its whole name, `old → new` for
-a rename, also appears under the file list, so it is readable without a
-pointer too.
-
-A scrolled list stays where you put it. It comes back around the selection
-only when the selection moves out of view, for example with `j` or `k`.
-
-6. **The view**, one of three:
-
-| View | Shows |
-| --- | --- |
-| Diff | The change, coloured, with line numbers from git's hunks |
-| After | The whole file as the commit left it, numbered from line 1 |
-| Before | The whole file as it was in the commit's first parent |
-
-The status letters are git's own:
-
-| Letter | Meaning |
-| --- | --- |
-| `A` | Added |
-| `M` | Modified |
-| `D` | Deleted |
-| `R` | Renamed, possibly with changes |
-| `C` | Copied |
-| `T` | Type changed, for example a file became a symlink |
-| `U` | Unmerged |
-
-## How it behaves
-
-- **It starts where you are.** The pane opens on the worktree that holds the
-  session's folder, at its newest commit not yet in the default branch, and
-  its first changed file.
-- **It follows new work.** While the newest commit is selected, a refresh
-  moves to the new newest commit. Refreshes happen after Claude's successful
-  Edit, Write, NotebookEdit and non-read-only Bash calls, and after each
-  turn, about 0.4 s after the last one. They run only while the pane is open.
-- **It stays put on history.** On an older commit, a refresh keeps that
-  commit and file, as long as they still exist.
-- **Selections are by identity.** The pane remembers the worktree path, the
-  commit SHA and the file path, not list positions. New commits never shift
-  what you are looking at.
-- **Diffs show the whole file** when it fits in the pane. Bigger changes fall
-  back to 20 lines of context around each change, and the pane says so.
-- **Merges compare with their first parent**, the branch that was merged
-  into. A root commit compares with the empty tree.
-- **Renames diff as renames.** Before reads the file under its old path.
-- **A failure keeps what loaded.** If one git step fails, the pane keeps
-  what it had and prints git's message. Outside a repository it says so and
-  offers to try again.
-- **Fast clicks never show stale results.** When a newer selection starts
-  loading, the older load is dropped.
-- **A plugin reload keeps your place.** The selection and the loaded data
-  live in the session's plugin state, which survives a hot reload.
-
-## Limits
-
-| What | Limit | Past it |
-| --- | --- | --- |
-| Commits listed | 100 newest | Older commits are not reachable from the pane |
-| Rows in one list | 8 at a time | ▲ and ▼ in its scroll column page through the rest |
-| Text in the view | 60,000 characters | Cut on a line or hunk boundary, with a note |
-| File size for After and Before | 4 MB | A note instead of the file |
-| One git command | 20 s | That step fails and shows the error |
-
-Binary files are listed but not shown. There is no view of uncommitted
-changes yet.
-
-## What it runs
-
-Only these git commands, through Claude Code's process runner, in the
-selected worktree:
-
-| Command | For |
-| --- | --- |
-| `rev-parse --show-toplevel` | Finding the repository |
-| `worktree list --porcelain -z` | The worktree list |
-| `log -z --max-count=100 HEAD` | The commit list |
-| `diff-tree -r -M -z --name-status` and `--numstat` | Changed files and line counts |
-| `diff-tree -p -M --unified=…` | The diff of one file |
-| `cat-file -s` and `cat-file blob` | The file before or after |
-| `hash-object -t tree /dev/null` | The empty tree, for root commits |
-
-Every command runs with `GIT_OPTIONAL_LOCKS=0`, so reading never takes
-git's index lock from an agent that is committing. Output is read
-NUL-separated, so paths with spaces, quotes or non-ASCII characters come
-through as they are. Claude Code runs git with repository hooks turned off.
-
-### The debug section
-
-`/commit-walk debug`, the `x` key or the Debug button shows a framed section
-under the header:
-
-- **Versions:** the plugin's and Claude Code's, and the surface.
-- **The pane:** its size and placement, and which welcome art it chose.
-- **Paths:** the session's folder and the repository.
-- **The selection:** worktree, commit, file, view, following or pinned, and
-  which list is open.
-- **What loaded:** the counts, how long ago, and the last error.
-- **The last 10 git commands:** exit code and time taken. A failing command
-  is red and shows the first line of git's error.
-
-It cannot help when Claude Code refuses the whole drawing, because then
-nothing of the plugin is drawn. The debug log covers that case, as below.
-
-## Troubleshooting
-
-**On a Mac with Homebrew.** The `claude-code` cask follows Claude Code's
-stable channel, about a week behind the latest. commit-walk works from
-2.1.292, the stable version when 1.5.0 came out. For the newest Claude Code,
-install the `claude-code@latest` cask instead.
-
-**`/commit-walk` does not exist.** The plugin is not loaded in this session. Run
-`/reload-plugins`, or start a new session. `claude plugin list` should show
-`commit-walk` as enabled.
-
-**"No repository to review".** The session's folder is not inside a Git
-repository. Start Claude Code inside one.
-
-**"Commit walk is open but not drawn yet".** No surface could place the
-pane. A headless `claude -p` run draws nothing. In a terminal, widen the
-window.
-
-**The pane is empty, or closed right after opening.** Claude Code refused
-to draw it. Versions before 1.1.0 did this on any branch with more than 64
-commits, because a picker may hold at most 64 options. Version 1.4.0 did it
-on Claude Code before 2.1.300, which refuses a button holding coloured text.
-Update the plugin.
-Otherwise, Claude Code refused the drawing for another reason.
-Start Claude Code with `--debug` and look for a line containing
-`ui.render (Pane)` and `does not validate`. It names the reason.
-
-**A diff draws as plain text.** The diff was not in a form the code view
-can colour. The debug log gives the reason on a line containing
-"drawn as plain code".
-
-**The pane does not follow Claude's commits.** It follows only while the
-newest commit is selected. Press `n` until Newer is dimmed, or press `r`.
-
-## Develop
-
-The files, checks and local workflow are in [docs/DEVELOP.md](docs/DEVELOP.md).
+- [Guide](docs/GUIDE.md): the commands, what the pane shows, how it follows new commits, and its limits
+- [Install](docs/INSTALL.md): requirements, installing from a shell or the desktop app, updating and removing
+- [Troubleshooting](docs/TROUBLESHOOTING.md): the git commands it runs, the debug section, and fixes for common problems
+- [Develop](docs/DEVELOP.md): the files, the checks and working on a local copy

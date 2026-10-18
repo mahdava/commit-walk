@@ -54,8 +54,8 @@ shot() {
   $T capture-pane -eNpt s > "$f.ansi"; echo "$1" >> "$OUT/frames/durations"
   if [ -n "${2:-}" ]; then echo "$2" > "$f.json"; fi
 }
-# key <key> <what it does> <seconds>: press it and show it pressed.
-key() { $T send-keys -t s "$1"; sleep 1.2; shot "$3" "{\"key\":\"$1\",\"label\":\"$2\"}"; }
+# key <key> <seconds>: press it and show it pressed, as tools/art/keys.mjs names it.
+key() { $T send-keys -t s "$1"; sleep 1.2; shot "$2" "{\"key\":\"$1\"}"; }
 # click <text on screen> <column offset> <seconds>: point at it, click, show the result.
 click() {
   local c r; read -r c r < <(at "$1"); c=$((c + $2))
@@ -72,16 +72,17 @@ shot 1.0
 $T send-keys -t s -l "/commit"; sleep 0.4; shot 0.4
 $T send-keys -t s -l -- "-walk"; sleep 0.6; shot 1.0
 $T send-keys -t s Enter; sleep 3; shot 2.4 '{"key":"Enter","label":"/commit-walk"}'
-key j "next file" 2.0
-key o "older commit" 1.6
-key o "older commit" 1.8
-key j "next file" 2.6; STILL=$(printf %02d $n)
-key a "after" 1.8
-key b "before" 1.8
-key d "diff" 1.2
+key j 2.0
+key o 1.6
+key o 1.8
+key j 2.6; STILL=$(printf %02d $n)
+key a 1.8
+key b 1.8
+key d 1.2
 click "Commit    " 20 2.2
 click "Record the climb" 0 2.4
 click "[ all ]" 2 2.2
+key h 2.2
 click "Commit    " 20 3.0
 
 $T kill-server
