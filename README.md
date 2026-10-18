@@ -13,27 +13,9 @@ leaving the session.
 Everything comes from git and is only read. The plugin gives the model no
 tool, writes nothing to the repository and makes no network requests.
 
-```
- ✿ notsofast  [ Refresh ]
- Following the newest commit
+<p align="center"><img src="assets/commit-walk-demo.gif" alt="Commit Walk in a Claude Code session: the pane opens on a feature branch, steps through files and older commits, switches between Diff, After and Before, picks a commit from the unfolded list and switches the range to all commits" width="900"></p>
 
- Worktree  main  ·  notsofast                                ▾
-
- Commit    ae6ad8e  Merge pull request #199 from mahdava/…   ▾
- Lucia · 6 days ago · merge, against its first parent · 1 of 100
- [ Older ]  [ Newer ]
-
- File      M  web/app/audit/page.tsx  +42 −3                 ▾
- [ Prev file ]  [ Next file ]  9 of 14
-
- [ Diff ]  [ After ]  [ Before ]
-
-   12    const rows = useAuditRows(filters)
-   13  - return <Table rows={rows} />
-   13  + return <AuditTable rows={rows} density="compact" />
- …
- keys: o/n commit · k/j file · d/a/b view · r refresh · Esc close
-```
+<p align="center"><sub>A walk through a demo branch, recorded in a real session (<a href="assets/commit-walk-demo.mp4">MP4</a>).</sub></p>
 
 ## Contents
 
@@ -131,6 +113,8 @@ keyboard:
 
 ## What the pane shows
 
+<p align="center"><img src="assets/screenshots/diff.png" alt="The pane on a feature branch: worktree row, the not-in-main range with 4 commits, the commit 'Grade trails as easy, moderate or hard', its two files with src/index.ts selected, and the coloured diff" width="820"></p>
+
 From the top down:
 
 1. **The repository's name**, after a ✿, and a Refresh button. Under them, a line says
@@ -171,6 +155,8 @@ From the top down:
 5. **Files**, always unfolded: the files the commit changed, with their
    status letter in colour and their line counts. Renames show as
    `old → new`, and binary files say "binary". Prev and Next sit above it.
+
+<p align="center"><img src="assets/screenshots/commit-list.png" alt="The Commit row unfolded into the list of the branch's four commits, the selected one marked with a triangle and the longest subject ending in an ellipsis" width="820"></p>
 
 Every list is a frame of whole-row buttons, so a click on a row picks it,
 and the row under the pointer is highlighted. The selected row is marked ▶.
@@ -216,33 +202,7 @@ The status letters are git's own:
 The sunflower from the logo walks a commit line whenever there is nothing to
 walk yet:
 
-```
-                       .--
-             -+----  .-...--
-             +.....-++.....+. .---.
-       .-----#......-+.....++-....+
-       -......+-.....+--...+......+  .+.
-       --......-+-++++++++#-.....-- .-  .-.
-       -++---..-#-----------+-..++--   --
-    -+-......-++----------++-+#-....--
-    --........#----++-----##--#.....--
-    .-+.......#----##+---+++--#-..-+.
-++++-+++#++++-#-----+++++#+---#--++++++++-.
-++-------#+....#+-----++++---#-....++----++
- +++++++#+......+#+-------++#-.....-#+--++
-  -+++++#-.....-+..-++++++-..-+----+++++.
-    .----+-----#......--......# .-----.
-               #-.....++-.....+
-             -###+..--   .-++#.    ...  .- .
-          .++###  ..        +##+---.  -. +.--
-        .-..+---            .+.+---.-++.   -
-       .-----+--..           #----+#+-
-        ..-..-. .-           .--+#-.
-           ....---             .
-    ●━━━━━━━━━━━●━━━━━━━━━━━●━━━━━━━━━━━●
-
-                 Commit Walk
-```
+<p align="center"><img src="assets/screenshots/welcome.png" alt="The welcome screen on main: the large sunflower in yellow, brown and green walking the four-dot commit line, the title Commit Walk, and the message that work happens on branches with a Show all commits button" width="820"></p>
 
 It shows while the repository is first read, outside a repository, on a
 worktree with no commits yet, and under "not in" on the default branch or a
@@ -256,8 +216,11 @@ that fits with room for the message under it:
 | Version | Size | Shown when the pane has |
 | --- | --- | --- |
 | Large sunflower | 71 × 36 | 73 columns and 46 rows |
-| Sunflower, above | 45 × 22 | 47 columns and 32 rows |
+| Medium sunflower | 45 × 22 | 47 columns and 32 rows |
 | Small sunflower | 23 × 11 | Any room: the pane is always at least 24 columns |
+
+The pane's own rows sit above the art, so the large one needs a terminal
+about 55 rows tall. The screenshot above is 128 × 64.
 
 All three sunflowers are Lucia's drawings. The two larger ones take their
 colours from a mask per row in `hooks/welcome.ts`, one letter per character.
@@ -395,6 +358,9 @@ Code's own plugin environment, with no Node APIs.
 | `assets/commit-walk-logo.svg` | The logo |
 | `assets/commit-walk-logo-outlined.svg` | The logo with a white outline, for dark backgrounds; the README shows it |
 | `assets/logo.png` | The first logo, as a PNG |
+| `assets/commit-walk-demo.gif`, `.mp4` | The demo at the top of this README |
+| `assets/screenshots/` | The README's screenshots |
+| `tools/screenshots/` | `make-media.sh` remakes the demo and screenshots from a real session in a throwaway repository; its header lists what it needs |
 
 Checks:
 
