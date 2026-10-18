@@ -20,7 +20,6 @@ Code's own plugin environment, with no Node APIs.
 | `assets/logo.png` | The first logo, as a PNG |
 | `assets/commit-walk-demo.gif`, `.mp4` | The demo at the top of the README |
 | `assets/screenshots/` | The guide's screenshot |
-| `assets/sunflower.svg` | The decorative sunflower before each README heading (empty alt, so screen readers skip it) |
 | `assets/keyboard.svg` | The keys the pane uses, on a keyboard; the README shows it |
 | `tools/screenshots/` | `make-media.sh` remakes the demo and screenshot from a real session in a throwaway repository; its header lists what it needs |
 | `tools/art/keys.mjs` | What each key does and its colour, shared by the keyboard image and the demo's keycaps |
