@@ -36,10 +36,15 @@ export const TONE_COLOR: Record<Tone, string | undefined> = {
 /** Tones drawn dim. */
 export const DIM_TONES: ReadonlySet<Tone> = new Set<Tone>(['motion', 'line'])
 
-export type Art = { rows: readonly string[]; mask: readonly string[]; width: number }
+/**
+ * A drawing: its rows, and either a mask row per row naming each character's
+ * tone, or a palette giving every character its own colour (drawings made in
+ * the ASCII Fantasy Map Builder, which colours by character).
+ */
+export type Art = { rows: readonly string[]; mask: readonly string[]; palette?: Readonly<Record<string, string>>; width: number }
 
-function art(rows: readonly string[], mask: readonly string[]): Art {
-  return { rows, mask, width: Math.max(...rows.map(row => row.length)) }
+function art(rows: readonly string[], mask: readonly string[], palette?: Record<string, string>): Art {
+  return { rows, mask, palette, width: Math.max(...rows.map(row => row.length)) }
 }
 
 /** The commit line the sunflower walks on: four commits in the logo's colours. */
@@ -176,43 +181,52 @@ export const MEDIUM = art([
   "           hhhhhhh             h"
 ])
 
-/** The small sunflower, commit line included: the fallback for short or narrow panes. */
-export const SMALL = art([
-  "            \\   \\ | /   /",
-  "         '.  .-'''''''-.  .'",
-  "      --   /  ●       ●  \\   --",
-  "     ~~~  |       ◡       |  ~~~",
-  "      --   \\             /   --",
-  "         .'  '-._____.-'  '.",
-  "       ,-.  /    | |    \\  ,-.",
-  "      (__/       | |       \\__)",
-  "                /   \\",
-  "            ___/     \\___   ))",
-  "           (____)   (____)",
-  "  ●━━━━━━━━━━━●━━━━━━━━━━━●━━━━━━━━━━━●"
-],
+/** Lucia's small sunflower, 18 × 11, made in the ASCII Fantasy Map Builder: each character in its palette colour. */
+export const SMALL = art(
 [
-  "            ppppppppppppp",
-  "         pp  fffffffffff  pp",
-  "      pp   fffefffffffefff   pp",
-  "     ppp  ffffffffmffffffff  ppp",
-  "      pp   fffffffffffffff   pp",
-  "         pp  fffffffffff  pp",
-  "       lll  p    s s    p  lll",
-  "      llll       s s       llll",
-  "                sssss",
-  "            hhhssssssshhh   ww",
-  "           hhhhhh   hhhhhh",
-  "  BdddddddddddGdddddddddddYdddddddddddR"
-])
+  "        ##",
+  "  ###  #..#   ##",
+  " ##..###..####..#",
+  "  #..#@///// #..#",
+  " ###@//●//●//####",
+  "#....@///U///#...#",
+  " ### @////// #..##",
+  "      I    I  oo",
+  "     I      Iooo",
+  "    ooo     ooo",
+  "    ooooo"
+],
+  [],
+{
+    "#": "#c49a03",
+    ".": "#c49a03",
+    "/": "#421e05",
+    "@": "#421e05",
+    "I": "#2d6d2d",
+    "U": "#f05151",
+    "o": "#0f5106",
+    "●": "#ffffff"
+  },
+)
 
-export type Run = { text: string; tone: Tone | null }
+/** A stretch of one colour: a tone from the masks, or a palette colour; neither for spaces. */
+export type Run = { text: string; tone: Tone | null; color?: string }
 
 /** One art row as runs of one tone each; spaces carry no tone. */
 export function artRuns(source: Art, row: number): Run[] {
   const text = source.rows[row] ?? ''
   const mask = source.mask[row] ?? ''
   const runs: Run[] = []
+  if (source.palette) {
+    const palette = source.palette
+    for (const ch of text) {
+      const color = ch === ' ' ? undefined : palette[ch]
+      const last = runs[runs.length - 1]
+      if (last && last.color === color) last.text += ch
+      else runs.push({ text: ch, tone: null, color })
+    }
+    return runs
+  }
   for (let i = 0; i < text.length; i++) {
     const tone = text[i] === ' ' ? null : (TONE_OF[mask[i] ?? ' '] ?? null)
     const last = runs[runs.length - 1]

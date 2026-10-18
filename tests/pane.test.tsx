@@ -331,18 +331,7 @@ test('a worktree with no commits shows the welcome art and waits', async ($, on)
   await ui.unmount()
 })
 
-test('a narrow pane draws the one-line mark instead of the art', async ($, on) => {
-  const world = scenario()
-  engine(on, world, '/nowhere')
-  await $.session.start({ cwd: '/nowhere', surface: 'terminal', isInteractive: true } as never)
-  await $.command.run({ command: 'commit-walk', args: '', origin: { kind: 'user' }, presentation: {} } as never)
-  const ui = await $.ui.mount({ plugin: 'commit-walk', surface: 'terminal', ...PANE, props: { ...PANE.props, bodyColumns: 30 } })
-  expect(await ui.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
-  expect(await ui.find({ key: 'art-0' })).toBeUndefined()
-  await ui.unmount()
-})
-
-test('the welcome art is sized to the pane: large, medium, small, or a one-line mark', async ($, on) => {
+test('the welcome art is sized to the pane: large, medium, or the small sunflower in its palette', async ($, on) => {
   const world = scenario()
   engine(on, world, '/nowhere')
   await $.session.start({ cwd: '/nowhere', surface: 'terminal', isInteractive: true } as never)
@@ -367,13 +356,17 @@ test('the welcome art is sized to the pane: large, medium, small, or a one-line 
   await medium.unmount()
 
   const small = await mountAt(84, 25)
-  expect((await welcomeOf(small)).children?.length).toBe(12 + 2)
+  expect((await welcomeOf(small)).children?.length).toBe(11 + 2)
+  // Lucia's small sunflower keeps her map builder palette, colour by character.
+  const drawn = JSON.stringify(await small.drawn())
+  for (const color of ['#c49a03', '#421e05', '#2d6d2d', '#f05151', '#0f5106', '#ffffff']) expect(drawn).toContain(`"color":"${color}"`)
+  expect(drawn).not.toContain(';')
   await small.unmount()
 
-  const mark = await mountAt(30, 60)
-  expect((await welcomeOf(mark)).type).toBe('Text')
-  expect(await mark.find({ type: 'Text', text: /Commit Walk/ })).toBeDefined()
-  await mark.unmount()
+  // The pane is never narrower than 24 columns, so the 18-column small sunflower always fits.
+  const narrow = await mountAt(18, 60)
+  expect((await welcomeOf(narrow)).children?.length).toBe(11 + 2)
+  await narrow.unmount()
 })
 
 test('the file list: a row press selects that file, short lists have no scroll column', async ($, on) => {

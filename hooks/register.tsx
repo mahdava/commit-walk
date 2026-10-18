@@ -347,10 +347,10 @@ export const register: Register = on => {
       <Text key={key} wrap="truncate-end">
         {' '.repeat(Math.max(0, Math.floor((width - source.width) / 2)))}
         {artRuns(source, row).map((run, i) =>
-          run.tone === null ? (
+          run.tone === null && run.color === undefined ? (
             run.text
           ) : (
-            <Text key={`r${i}`} color={TONE_COLOR[run.tone]} dimColor={DIM_TONES.has(run.tone)}>
+            <Text key={`r${i}`} color={run.color ?? (run.tone ? TONE_COLOR[run.tone] : undefined)} dimColor={run.tone ? DIM_TONES.has(run.tone) : false}>
               {run.text}
             </Text>
           ),

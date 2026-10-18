@@ -257,11 +257,12 @@ that fits with room for the message under it:
 | --- | --- | --- |
 | Large sunflower | 71 × 36 | 73 columns and 46 rows |
 | Sunflower, above | 45 × 22 | 47 columns and 32 rows |
-| Small sunflower | 39 × 12 | 41 columns |
-| One-line ✿ mark | 1 row | Less than that |
+| Small sunflower | 18 × 11 | Any room: the pane is always at least 24 columns |
 
-The two larger sunflowers are Lucia's drawings. The colours come from a mask
-per row in `hooks/welcome.ts`, one letter per character.
+All three sunflowers are Lucia's drawings. The two larger ones take their
+colours from a mask per row in `hooks/welcome.ts`, one letter per character.
+The small one was made in her ASCII Fantasy Map Builder and keeps its
+palette: every character has its own colour, as in the builder.
 
 ## How it behaves
 
