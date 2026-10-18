@@ -2,31 +2,12 @@
 
 # <picture><img src="../assets/sunflower-emoji.svg" alt="" width="28" height="28" align="top"></picture> Troubleshooting Commit Walk
 
-When the pane looks empty, wrong or stuck, start here. This page lists
-exactly what the plugin runs, shows how to read its debug section, and goes
-through the problems seen so far with their fixes.
+When the pane looks empty, wrong or stuck, start here. This page shows how
+to read the pane's debug section and goes through the problems seen so far
+with their fixes. The git commands the plugin runs are listed in
+[The git commands Commit Walk runs](GIT.md).
 
-## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> What it runs
-
-Only these git commands, through Claude Code's process runner, in the
-selected worktree:
-
-| Command | For |
-| --- | --- |
-| `rev-parse --show-toplevel` | Finding the repository |
-| `worktree list --porcelain -z` | The worktree list |
-| `log -z --max-count=100 HEAD` | The commit list |
-| `diff-tree -r -M -z --name-status` and `--numstat` | Changed files and line counts |
-| `diff-tree -p -M --unified=…` | The diff of one file |
-| `cat-file -s` and `cat-file blob` | The file before or after |
-| `hash-object -t tree /dev/null` | The empty tree, for root commits |
-
-Every command runs with `GIT_OPTIONAL_LOCKS=0`, so reading never takes
-git's index lock from an agent that is committing. Output is read
-NUL-separated, so paths with spaces, quotes or non-ASCII characters come
-through as they are. Claude Code runs git with repository hooks turned off.
-
-### <picture><img src="../assets/sunflower-emoji.svg" alt="" width="20" height="20" align="top"></picture> The debug section
+## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> The debug section
 
 `/commit-walk debug`, the `x` key or the Debug button shows a framed section
 under the header:

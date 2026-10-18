@@ -26,7 +26,7 @@ Code's own plugin environment, with no Node APIs.
 | `tools/screenshots/` | `make-media.sh` remakes the demo and screenshot from a real session in a throwaway repository; its header lists what it needs |
 | `tools/art/keys.mjs` | What each key does and its colour, shared by the keyboard image and the demo's keycaps |
 | `tools/art/keyboard.mjs` | Draws `assets/keyboard.svg`: `node tools/art/keyboard.mjs > assets/keyboard.svg` |
-| `docs/` | The guide, install, troubleshooting and this page, linked from the README |
+| `docs/` | The guide, install, git commands, troubleshooting and this page, linked from the README |
 
 Checks:
 

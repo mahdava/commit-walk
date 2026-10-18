@@ -69,7 +69,8 @@ keyboard back to it.
 
 - [Guide](docs/GUIDE.md): the commands, what the pane shows, how it follows new commits, and its limits
 - [Install](docs/INSTALL.md): requirements, installing from a shell or the desktop app, updating and removing
-- [Troubleshooting](docs/TROUBLESHOOTING.md): the git commands it runs, the debug section, and fixes for common problems
+- [Git commands](docs/GIT.md): every git command it runs, where they are in the code, and how to check your repository's git hooks
+- [Troubleshooting](docs/TROUBLESHOOTING.md): the debug section, and fixes for common problems
 - [Develop](docs/DEVELOP.md): the files, the checks and working on a local copy
 
 ## <picture><img src="assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> Credits
