@@ -1,6 +1,9 @@
 // The pane, one screen at a time: no repository, still reading, nothing to
 // walk (the welcome screen), or the walk itself.
 
+import type { ElementTable } from 'claude-code'
+
+import { printable } from '../printable'
 import { commitSection, worktreePicker } from './commits'
 import { debugButton, debugSection } from './debug'
 import { fileSection } from './files'
@@ -53,6 +56,18 @@ export function drawPane(f: Frame) {
       {viewButtons(f)}
       {contentView(f)}
       <Text dimColor wrap="truncate-end">keys: o/n commit · k/j file · d/a/b view · h range · r refresh · x debug · Esc close</Text>
+    </Box>
+  )
+}
+
+/** When drawing the pane threw: what failed and what to do, instead of a blank pane. */
+export function drawFailure(ui: ElementTable, message: string) {
+  const { Box, Text } = ui
+  return (
+    <Box flexDirection="column" gap={1}>
+      <Text bold>Commit walk could not draw this view</Text>
+      <Text color="red">{printable(message)}</Text>
+      <Text dimColor>Run /commit-walk refresh to try again, or press Esc to close the pane.</Text>
     </Box>
   )
 }

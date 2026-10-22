@@ -22,7 +22,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { About, ChangedFile, Commit, Content, Expandable, GitTrace, RangeMode, Ranges, Selection, ViewMode, Worktree } from '../types'
 import { createRepo, type GitRun, type Repo } from './git'
-import { drawPane } from './pane'
+import { drawFailure, drawPane } from './pane'
 import { frameOf, type Actions, type PaneValues } from './pane/frame'
 import {
   EMPTY_SNAPSHOT, GIT_TIMEOUT_MS, INITIAL_SELECTION, PANE, PANE_COLUMNS, REFRESH_DELAY_MS, TITLE, TRACE_LENGTH, WRITING_TOOLS,
@@ -110,7 +110,12 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const place = { bodyColumns: e.props.bodyColumns, bodyRows: e.props.scroll.bodyRows, placement: e.props.placement, surface: e.surface }
-    return drawPane(frameOf(await paneValues($), actionsFor($), $.ui.resolve(e), place))
+    const ui = $.ui.resolve(e)
+    try {
+      return drawPane(frameOf(await paneValues($), actionsFor($), ui, place))
+    } catch (cause) {
+      return drawFailure(ui, messageOf(cause))
+    }
   })
 }
 

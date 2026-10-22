@@ -1,6 +1,7 @@
 // How the selected file reads: Diff, After or Before, and the code itself.
 
 import type { ViewMode } from '../../types'
+import { hasHidden } from '../printable'
 import type { Frame } from './frame'
 
 export function viewButtons(f: Frame) {
@@ -35,6 +36,9 @@ export function contentView(f: Frame) {
         <Code source={content.source} path={content.path} startLine={1} />
       )}
       {content.isTruncated ? <Text dimColor>Cut here to fit the pane; open the file to read the rest.</Text> : null}
+      {hasHidden(content.source) ? (
+        <Text dimColor>This file holds hidden characters, shown as symbols: ␛ for ESC, ⟨RLO⟩ for a right-to-left override.</Text>
+      ) : null}
     </Box>
   )
 }

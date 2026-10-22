@@ -24,15 +24,16 @@ Two rules of that environment shape how the code is split:
 | `hooks/state.ts` | Constants and the first values of the state |
 | `hooks/git.ts` | The git commands and NUL-safe parsers. It makes no engine calls, so tests drive it with canned output. |
 | `hooks/labels.ts` | Worktrees, commits and files as one line of text |
+| `hooks/printable.ts` | Text from git made safe to draw: control characters, which Claude Code refuses, and characters that draw as nothing or reorder text, shown as symbols and markers |
 | `hooks/pane/index.tsx` | The pane, one screen at a time: no repository, reading, nothing to walk, the walk |
-| `hooks/pane/frame.ts` | What every part draws with: the values, the actions, the elements and the room |
+| `hooks/pane/frame.ts` | What every part draws with: the values, the actions, the elements (which clean every string they draw) and the room |
 | `hooks/pane/header.tsx`, `debug.tsx`, `commits.tsx`, `ranges.tsx`, `files.tsx`, `view.tsx`, `welcome.tsx` | One part of the pane each |
 | `hooks/pane/list.tsx` | The lists: rows, scroll column, hover cards, folding |
 | `hooks/window.ts` | The window of rows a long list shows |
 | `hooks/welcome.ts` | The welcome art, with a colour mask per row |
 | `types/index.d.ts` | The state contract: the values kept in the session's plugin state |
 | `tests/support.ts` | The tests' fake repository, fake git and engine, and helpers that read the drawing |
-| `tests/walk.test.tsx`, `lists.test.tsx`, `ranges.test.tsx`, `welcome.test.tsx`, `debug.test.tsx` | Pane tests by feature, on the terminal, desktop and mobile surfaces |
+| `tests/walk.test.tsx`, `lists.test.tsx`, `ranges.test.tsx`, `welcome.test.tsx`, `debug.test.tsx`, `control.test.tsx` | Pane tests by feature, on the terminal, desktop and mobile surfaces |
 | `tests/git.test.ts` | Parser and fitting tests |
 | `tests/window.test.ts` | List window tests |
 | `LICENSE` | The MIT License, for the code and documentation |
