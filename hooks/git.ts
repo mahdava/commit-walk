@@ -2,7 +2,7 @@
 // their output. No engine calls here: `createRepo` takes the runner, so the
 // tests drive it with canned git output.
 
-import type { ChangedFile, Commit, Content, FileStatus, Ranges, Worktree } from '../types'
+import type { ChangedFile, Commit, Content, FileStatus, Ranges, Stage, Worktree } from '../types'
 
 /** What one git run answers (the shape of `$.process.run`'s result). */
 export type GitRun = { exitCode: number; stdout: string; stderr: string; isStdoutTruncated?: boolean }
@@ -18,6 +18,10 @@ export const MAX_COMMITS = 100
 const NEAR_CONTEXT = 20
 /** A blob larger than this is not read into the pane. */
 const MAX_BLOB_BYTES = 4_000_000
+/** Untracked files whose lines are counted, one git run each; the rest read as "new file". */
+const MAX_UNTRACKED_COUNTED = 50
+/** Context that takes in a whole file: the diff then holds every line of both sides. */
+const WHOLE_FILE = 1_000_000
 
 const FIELD = '\x1f'
 const LOG_FORMAT = ['%H', '%h', '%P', '%an', '%ar', '%s'].join('%x1f')
@@ -125,6 +129,48 @@ export function parseNumstat(text: string): NumStat[] {
   return out
 }
 
+type StatusEntry = { xy: string; path: string; oldPath: string | null }
+
+/**
+ * `git status --porcelain=v1 -z`: `XY path`, NUL-ended; a rename or copy is
+ * followed by its old path. X is the staged change, Y the unstaged one.
+ */
+export function parseStatus(text: string): StatusEntry[] {
+  const tokens = text.split('\0')
+  const out: StatusEntry[] = []
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i] ?? ''
+    if (token.length < 4 || token.charAt(2) !== ' ') continue
+    const xy = token.slice(0, 2)
+    const path = token.slice(3)
+    const isMoved = /[RC]/.test(xy)
+    const oldPath = isMoved ? (tokens[i + 1] ?? null) : null
+    if (isMoved) i += 1
+    out.push({ xy, path, oldPath })
+  }
+  return out
+}
+
+/** The one letter a file row shows for an uncommitted file's status: the staged change's, else the unstaged one's. */
+export function statusOf(xy: string): FileStatus {
+  if (xy === '??') return 'A'
+  const letter = (xy.charAt(0) === ' ' ? xy.charAt(1) : xy.charAt(0)) as FileStatus
+  return STATUSES.has(letter) ? letter : 'M'
+}
+
+/**
+ * The new side of a whole-file diff (`--unified` past the file's length):
+ * its unchanged and added lines, in order. How the pane shows a file as it
+ * is on disk using git alone.
+ */
+export function afterFromHunks(hunks: string): string {
+  const kept: string[] = []
+  for (const line of hunks.split('\n')) {
+    if (line.startsWith(' ') || line.startsWith('+')) kept.push(line.slice(1))
+  }
+  return kept.join('\n')
+}
+
 /** Joins name-status and numstat rows by path. */
 export function joinChanges(names: NameStatus[], stats: NumStat[]): ChangedFile[] {
   const byPath = new Map(stats.map(stat => [stat.path, stat]))
@@ -218,6 +264,48 @@ export function createRepo(run: GitRunner) {
 
   async function baseOf(cwd: string, commit: Commit): Promise<string> {
     return commit.parents[0] ?? (await emptyTree(cwd))
+  }
+
+  /** A diff command's output. `--no-index` exits 1 when the two sides differ, which is not a failure. */
+  async function gitDiff(cwd: string, args: readonly string[]): Promise<GitRun> {
+    const result = await run(cwd, args)
+    if (result.exitCode === 0 || (result.exitCode === 1 && args.includes('--no-index'))) return result
+    throw new GitError(args, result)
+  }
+
+  /**
+   * A one-file diff fitted to `budget`: the whole file as context when it
+   * fits, else NEAR_CONTEXT lines around each change. Null when there are no
+   * textual changes, `binary` for a binary file.
+   */
+  async function fitPatch(cwd: string, argsFor: (context: number) => string[], budget = SOURCE_BUDGET) {
+    const patch = async (context: number) => {
+      const out = (await gitDiff(cwd, argsFor(context))).stdout
+      return { hunks: hunksOf(out), isBinary: /^Binary files /m.test(out) }
+    }
+    let { hunks, isBinary } = await patch(WHOLE_FILE)
+    if (isBinary) return 'binary' as const
+    let context: 'full' | 'near' = 'full'
+    if (hunks.length > budget) {
+      hunks = (await patch(NEAR_CONTEXT)).hunks
+      context = 'near'
+    }
+    if (hunks === '') return null
+    return { context, ...fitHunks(hunks, budget) }
+  }
+
+  /** HEAD's SHA, or null before the first commit. */
+  async function head(cwd: string): Promise<string | null> {
+    const found = await run(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD'])
+    return found.exitCode === 0 ? found.stdout.trim() || null : null
+  }
+
+  /** An untracked file's line counts, from git's diff of it against nothing. */
+  async function untrackedStat(cwd: string, path: string): Promise<{ added: number; deleted: number; isBinary: boolean }> {
+    const out = (await gitDiff(cwd, ['diff', '--no-index', '--numstat', '--', '/dev/null', path])).stdout
+    const match = /^(-|\d+)\t(-|\d+)\t/.exec(out)
+    if (!match || match[1] === '-') return { added: 0, deleted: 0, isBinary: match !== null }
+    return { added: Number(match[1]), deleted: Number(match[2]), isBinary: false }
   }
 
   /** Reads one blob as text, or says why it is not shown. */
@@ -319,22 +407,13 @@ export function createRepo(run: GitRunner) {
       if (file.isBinary) return { kind: 'note', text: 'Binary file: no text diff.' }
       const base = await baseOf(cwd, commit)
       const paths = file.oldPath && file.oldPath !== file.path ? [file.oldPath, file.path] : [file.path]
-      const patch = async (context: number) =>
-        hunksOf(
-          (await git(cwd, ['diff-tree', '-p', '-M', '--no-color', '--no-ext-diff', `--unified=${context}`, base, commit.sha, '--', ...paths]))
-            .stdout,
-        )
-      let hunks = await patch(1_000_000)
-      let context: 'full' | 'near' = 'full'
-      if (hunks.length > SOURCE_BUDGET) {
-        hunks = await patch(NEAR_CONTEXT)
-        context = 'near'
-      }
-      if (hunks === '') {
+      const fitted = await fitPatch(cwd, context => ['diff-tree', '-p', '-M', '--no-color', '--no-ext-diff', `--unified=${context}`, base, commit.sha, '--', ...paths])
+      if (fitted === 'binary') return { kind: 'note', text: 'Binary file: no text diff.' }
+      if (fitted === null) {
         const what = file.status === 'R' || file.status === 'C' ? 'Renamed without changes.' : 'No textual changes (mode or type only).'
         return { kind: 'note', text: what }
       }
-      return { kind: 'diff', context, ...fitHunks(hunks) }
+      return { kind: 'diff', ...fitted }
     },
 
     async after(cwd: string, commit: Commit, file: ChangedFile): Promise<Content> {
@@ -347,6 +426,94 @@ export function createRepo(run: GitRunner) {
       const parent = commit.parents[0]
       if (!parent) return { kind: 'note', text: 'Root commit: there is no earlier version.' }
       return blob(cwd, parent, file.oldPath ?? file.path)
+    },
+
+    // ── Uncommitted changes: staged, unstaged and untracked, against HEAD ──
+
+    head,
+
+    /**
+     * The worktree's uncommitted files, as `git status` lists them (so what
+     * .gitignore skips is left out), with line counts against HEAD, or
+     * against the empty tree before the first commit.
+     */
+    async uncommitted(cwd: string): Promise<ChangedFile[]> {
+      const listed = parseStatus((await git(cwd, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])).stdout)
+      if (listed.length === 0) return []
+      const base = (await head(cwd)) ?? (await emptyTree(cwd))
+      const stats = parseNumstat((await git(cwd, ['diff', '-M', '-z', '--numstat', '--no-ext-diff', base])).stdout)
+      const byPath = new Map(stats.map(stat => [stat.path, stat]))
+      const untracked = listed.filter(one => one.xy === '??').slice(0, MAX_UNTRACKED_COUNTED)
+      const counted = new Map(await Promise.all(untracked.map(async one => [one.path, await untrackedStat(cwd, one.path)] as const)))
+      return listed.map(one => {
+        const stat = byPath.get(one.path) ?? counted.get(one.path)
+        return {
+          status: statusOf(one.xy),
+          path: one.path,
+          oldPath: one.oldPath,
+          xy: one.xy,
+          isBinary: stat?.isBinary ?? false,
+          added: stat?.added ?? 0,
+          deleted: stat?.deleted ?? 0,
+          ...(one.xy === '??' && !stat ? { isUncounted: true } : {}),
+        }
+      })
+    },
+
+    /** An uncommitted file's diff: the staged part against HEAD, the unstaged part against what is staged. */
+    async uncommittedDiff(cwd: string, file: ChangedFile): Promise<Content> {
+      if (file.isBinary) return { kind: 'note', text: 'Binary file: no text diff.' }
+      const xy = file.xy ?? '  '
+      const paths = file.oldPath && file.oldPath !== file.path ? [file.oldPath, file.path] : [file.path]
+      const common = ['--no-color', '--no-ext-diff']
+      const wanted: { stage: Stage; argsFor: (context: number) => string[] }[] = []
+      if (xy === '??') {
+        wanted.push({ stage: 'unstaged', argsFor: context => ['diff', '--no-index', ...common, `--unified=${context}`, '--', '/dev/null', file.path] })
+      } else {
+        if (xy.charAt(0) !== ' ') wanted.push({ stage: 'staged', argsFor: context => ['diff', '--cached', '-M', ...common, `--unified=${context}`, '--', ...paths] })
+        if (xy.charAt(1) !== ' ') wanted.push({ stage: 'unstaged', argsFor: context => ['diff', ...common, `--unified=${context}`, '--', file.path] })
+      }
+      const budget = Math.floor(SOURCE_BUDGET / Math.max(1, wanted.length))
+      const parts: Extract<Content, { kind: 'parts' }>['parts'] = []
+      for (const one of wanted) {
+        const fitted = await fitPatch(cwd, one.argsFor, budget)
+        if (fitted === 'binary') return { kind: 'note', text: 'Binary file: no text diff.' }
+        if (fitted) parts.push({ stage: one.stage, ...fitted })
+      }
+      if (parts.length > 0) return { kind: 'parts', parts }
+      if (xy === '??') return { kind: 'note', text: 'A new, empty file.' }
+      return { kind: 'note', text: /[RC]/.test(xy) ? 'Renamed without changes.' : 'No textual changes (mode or type only).' }
+    },
+
+    /** An uncommitted file as it is now: rebuilt from git's whole-file diff when it differs from what is staged. */
+    async uncommittedAfter(cwd: string, file: ChangedFile): Promise<Content> {
+      const xy = file.xy ?? '  '
+      if (xy.charAt(1) === 'D' || xy === 'D ') return { kind: 'note', text: 'The file is deleted: there is nothing on disk to show.' }
+      if (file.isBinary) return { kind: 'note', text: 'Binary file: no text to show.' }
+      if (xy === '??' || xy.charAt(1) !== ' ') {
+        const args =
+          xy === '??'
+            ? ['diff', '--no-index', '--no-color', '--no-ext-diff', `--unified=${WHOLE_FILE}`, '--', '/dev/null', file.path]
+            : ['diff', '--no-color', '--no-ext-diff', `--unified=${WHOLE_FILE}`, '--', file.path]
+        const result = await gitDiff(cwd, args)
+        if (/^Binary files /m.test(result.stdout)) return { kind: 'note', text: 'Binary file: no text to show.' }
+        const hunks = hunksOf(result.stdout)
+        if (hunks !== '') {
+          const fitted = fitText(afterFromHunks(hunks))
+          return { kind: 'file', path: file.path, source: fitted.source, isTruncated: fitted.isTruncated || result.isStdoutTruncated === true }
+        }
+        if (xy === '??') return { kind: 'note', text: 'A new, empty file.' }
+      }
+      // What is on disk matches what is staged, so the staged copy shows it.
+      return blob(cwd, '', file.path)
+    },
+
+    /** An uncommitted file as the last commit has it. */
+    async uncommittedBefore(cwd: string, file: ChangedFile, headSha: string | null): Promise<Content> {
+      if (headSha === null) return { kind: 'note', text: 'No commits yet: there is no earlier version.' }
+      const xy = file.xy ?? '  '
+      if (xy === '??' || xy.charAt(0) === 'A') return { kind: 'note', text: 'A new file: the last commit does not have it.' }
+      return blob(cwd, headSha, file.oldPath ?? file.path)
     },
   }
 }

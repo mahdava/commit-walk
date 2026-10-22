@@ -27,7 +27,8 @@ command was `/commits`.
 From the top down:
 
 1. **The repository's name**, after a ✿, and a Refresh button. Under them, a line says
-   whether the pane follows the newest commit or is pinned to an older one.
+   whether the pane follows the newest commit, is pinned to an older one, or
+   shows what is not committed yet.
    It shows "Loading…" while git runs, and git's message if a step failed.
 2. **Worktree**, a framed row showing the current worktree: its branch, or
    "detached @ sha" without one, then its folder name. Click anywhere on the
@@ -45,7 +46,8 @@ From the top down:
 
    **not in** is chosen by default, since work normally happens on
    branches. On the default branch itself, or on a branch level with it,
-   that range is empty and the pane shows the welcome screen. On the
+   that range is empty and the pane shows the welcome screen, unless there
+   are uncommitted changes, which it then shows instead. On the
    default branch it says so and offers **Show all commits**. On a
    branch level with it, the pane waits there and moves to the first commit
    as soon as it lands. `h` moves to the next range the worktree offers,
@@ -62,7 +64,10 @@ From the top down:
 4. **Commit**, a framed row that unfolds the same way, listing the newest
    100 commits of the chosen range by short SHA and subject. Under it are
    the author, the relative date, whether it is a merge or the root commit,
-   and its position, then the Older and Newer buttons.
+   and its position, then the Older and Newer buttons. While the worktree has
+   uncommitted changes, the list's first row is **✿ Uncommitted changes · 3
+   files**, and on the newest commit Newer reads **Uncommitted**. See
+   [Uncommitted changes](#-uncommitted-changes).
 5. **Files**, always unfolded: the files the commit changed, with their
    status letter in colour and their line counts. Renames show as
    `old → new`, and binary files say "binary". Prev and Next sit above it.
@@ -106,6 +111,40 @@ The status letters are git's own:
 | `T` | Type changed, for example a file became a symlink |
 | `U` | Unmerged |
 
+## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> Uncommitted changes
+
+What the worktree holds that is not committed yet, such as Claude's edits
+before it commits them, is one more stop after the newest commit. `n` or
+Newer on the newest commit goes there, as does the commit list's first row.
+It holds every staged, unstaged and untracked file, leaving out what
+`.gitignore` skips. With no uncommitted changes, there is no such row and
+Newer stays dimmed on the newest commit.
+
+Each file shows git's two-letter status, as `git status --short` writes it:
+the first letter is the staged change, the second the unstaged one.
+
+| Letters | Meaning |
+| --- | --- |
+| `M ` | Changed and staged |
+| ` M` | Changed, not staged |
+| `MM` | Staged, then changed again |
+| `A ` | A new file, staged |
+| ` D` | Deleted, not staged |
+| `R ` | Renamed, staged |
+| `??` | Untracked: new, and not staged yet |
+
+A label above the view says which part you are looking at: **✿ Staged
+changes**, against the last commit, or **✿ Unstaged changes**, against what
+is staged. A file staged and then changed again shows both parts in Diff,
+each under its own label. After shows the file as it is now, and Before as
+the last commit has it.
+
+All of it comes from git. For a file changed on disk, After is rebuilt from
+git's diff of the whole file, so the pane never reads your files itself.
+
+When everything is committed, the pane moves on to the new commit and
+follows it, as on the newest commit.
+
 ## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> How it behaves
 
 - **It starts where you are.** The pane opens on the worktree that holds the
@@ -115,6 +154,10 @@ The status letters are git's own:
   moves to the new newest commit. Refreshes happen after Claude's successful
   Edit, Write, NotebookEdit and non-read-only Bash calls, and after each
   turn, about 0.4 s after the last one. They run only while the pane is open.
+  After an edit that made no new commit, only the uncommitted changes are
+  read again.
+- **It stays on uncommitted work** while there is any, and moves on to the
+  newest commit once it is all committed.
 - **It stays put on history.** On an older commit, a refresh keeps that
   commit and file, as long as they still exist.
 - **Selections are by identity.** The pane remembers the worktree path, the
@@ -142,6 +185,6 @@ The status letters are git's own:
 | Text in the view | 60,000 characters | Cut on a line or hunk boundary, with a note |
 | File size for After and Before | 4 MB | A note instead of the file |
 | One git command | 20 s | That step fails and shows the error |
+| Untracked files with line counts | 50 | The rest say "new file" instead |
 
-Binary files are listed but not shown. There is no view of uncommitted
-changes yet.
+Binary files are listed but not shown.

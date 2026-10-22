@@ -8,12 +8,15 @@ import type { Selection, Snapshot } from '../types'
 
 /**
  * How much to load again: `repo` re-reads worktrees and commits (open,
- * refresh, another worktree); `commit` the changed files; `content` the code
- * area alone (another file or view).
+ * refresh, another worktree); `changes` the uncommitted files, or all of
+ * `repo` when HEAD moved (a refresh after an edit); `commit` the changed
+ * files; `content` the code area alone (another file or view).
  */
-export type Depth = 'repo' | 'commit' | 'content'
+export type Depth = 'repo' | 'changes' | 'commit' | 'content'
 
 export const PANE = 'commit-walk'
+/** What the selection names for the uncommitted changes, in place of a commit's SHA. */
+export const UNCOMMITTED = 'uncommitted'
 export const TITLE = 'Commit walk'
 /** Width the dock asks for beside a fullscreen transcript. */
 export const PANE_COLUMNS = 84
@@ -35,6 +38,8 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   ranges: { branch: null, isOnDefault: false, notInDefault: null, base: null },
   range: 'all',
   files: [],
+  uncommitted: [],
+  head: null,
   content: null,
   isLoading: false,
   error: null,
