@@ -1,5 +1,6 @@
 // The commit's changed files: Prev and Next, the list with each file's status
-// letter in colour, and the selected file's whole name when its row is cut.
+// letter in colour (git's two letters for uncommitted files), and the
+// selected file's whole name when its row is cut.
 
 import { fileName, fileText } from '../labels'
 import { LIST_ROWS } from '../state'
@@ -28,7 +29,8 @@ export function fileSection(f: Frame) {
           items: snap.files,
           at,
           keyOf: one => one.path,
-          tagOf: one => ({ text: one.status, color: STATUS_COLOR[one.status] }),
+          // An uncommitted file shows git's two letters, staged then unstaged (` M`, `MM`, `??`).
+          tagOf: one => ({ text: one.xy ?? one.status, color: STATUS_COLOR[one.status] }),
           textOf: fileText,
           noun: { one: 'file', many: 'files' },
           onPick: one => void f.act.load('content', { file: one.path }),

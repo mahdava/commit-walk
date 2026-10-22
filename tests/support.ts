@@ -7,6 +7,13 @@ export const PANE = {
   props: { title: 'Commit walk', isFocused: true, bodyColumns: 84, placement: 'dock', scroll: { offset: 0, bodyRows: 80 }, view: {} },
 } as const
 
+/**
+ * An uncommitted file: git's two letters, and the hunks its staged and
+ * unstaged diffs show (the unstaged one with the whole file as context), or
+ * for an untracked file its lines on disk.
+ */
+export type FakePending = { xy: string; path: string; oldPath?: string; staged?: string; unstaged?: string; lines?: string[]; isBinary?: boolean }
+
 export type FakeCommit = { sha: string; parents: string[]; subject: string; files: { status: string; path: string; oldPath?: string; added: number; deleted: number }[] }
 
 export const sha = (c: string) => c.repeat(40)
@@ -33,6 +40,8 @@ export function scenario() {
     ahead: {} as Record<string, Record<string, number>>,
     /** Per worktree, `for-each-ref … ahead-behind:HEAD` lines: `<branch>\t<theirs> <mine>`. */
     distances: {} as Record<string, string>,
+    /** Per worktree, its uncommitted files. None by default: most tests walk commits. */
+    pending: {} as Record<string, FakePending[]>,
   }
 }
 
@@ -46,6 +55,10 @@ export function fakeGit(world: World, cwd: string, args: readonly string[]) {
   switch (args[0]) {
     case 'rev-parse':
       if (cwd === '/nowhere') return { exitCode: 128, stdout: '', stderr: 'fatal: not a git repository (or any of the parent directories): .git' }
+      if (args[1] === '--verify' && args[args.length - 1] === 'HEAD') {
+        const newest = world.logs[cwd]?.[0]
+        return newest ? ok(`${newest.sha}\n`) : { exitCode: 1, stdout: '', stderr: '' }
+      }
       if (args[1] === '--verify') return world.refs.includes(args[args.length - 1] ?? '') ? ok(`${sha('c')}\n`) : { exitCode: 1, stdout: '', stderr: '' }
       return ok('/repo\n')
     case 'branch':
@@ -66,6 +79,10 @@ export function fakeGit(world: World, cwd: string, args: readonly string[]) {
       const commits = (world.logs[cwd] ?? []).slice(0, since === undefined ? undefined : (world.ahead[cwd]?.[since] ?? 0))
       return ok(commits.map(c => [c.sha, c.sha.slice(0, 7), c.parents.join(' '), 'Lucia', '1 hour ago', c.subject].join('\x1f')).join('\0'))
     }
+    case 'status':
+      return ok((world.pending[cwd] ?? []).map(p => (p.oldPath ? `${p.xy} ${p.path}\0${p.oldPath}` : `${p.xy} ${p.path}`)).join('\0') + ((world.pending[cwd] ?? []).length ? '\0' : ''))
+    case 'diff':
+      return fakeDiff(world.pending[cwd] ?? [], args)
     case 'hash-object':
       return ok(`${EMPTY_TREE}\n`)
     case 'diff-tree': {
@@ -81,11 +98,34 @@ export function fakeGit(world: World, cwd: string, args: readonly string[]) {
     }
     case 'cat-file': {
       const spec = args[args.length - 1] ?? ''
-      return args[1] === '-s' ? ok('24\n') : ok(`content of ${spec.split(':')[1]} at ${spec.slice(0, 7)}\n`)
+      if (args[1] === '-s') return ok('24\n')
+      // `:path` is the staged copy.
+      return spec.startsWith(':') ? ok(`staged content of ${spec.slice(1)}\n`) : ok(`content of ${spec.split(':')[1]} at ${spec.slice(0, 7)}\n`)
     }
     default:
       return { exitCode: 1, stdout: '', stderr: `unexpected git ${args.join(' ')}` }
   }
+}
+
+/** The `git diff` runs the uncommitted view makes, answered from the pending files. */
+function fakeDiff(pending: FakePending[], args: readonly string[]) {
+  const ok = (stdout: string, exitCode = 0) => ({ exitCode, stdout, stderr: '' })
+  const path = args[args.length - 1] ?? ''
+  const file = pending.find(p => p.path === path)
+  const header = (name: string) => `diff --git a/${name} b/${name}\n--- a/${name}\n+++ b/${name}\n`
+  if (args.includes('--no-index')) {
+    if (!file?.lines) return ok('')
+    if (file.isBinary) return ok(args.includes('--numstat') ? '-\t-\t/dev/null => ' + path + '\n' : `Binary files /dev/null and b/${path} differ\n`, 1)
+    if (args.includes('--numstat')) return ok(`${file.lines.length}\t0\t/dev/null => ${path}\n`, 1)
+    return ok(`${header(path)}@@ -0,0 +1,${file.lines.length} @@\n${file.lines.map(line => `+${line}`).join('\n')}\n`, 1)
+  }
+  if (args.includes('--numstat')) {
+    // Against HEAD: each tracked file's lines in and out, from its hunks.
+    const count = (hunks: string | undefined, sign: string) => (hunks ?? '').split('\n').filter(line => line.startsWith(sign)).length
+    return ok(pending.filter(p => p.xy !== '??').map(p => `${count(p.staged, '+') + count(p.unstaged, '+')}\t${count(p.staged, '-') + count(p.unstaged, '-')}\t${p.path}`).join('\0') + '\0')
+  }
+  const hunks = args.includes('--cached') ? file?.staged : file?.unstaged
+  return ok(hunks ? `${header(path)}${hunks}\n` : '')
 }
 
 /** Answers what the engine would beneath the plugin: git, panes, timers, the command registry. */

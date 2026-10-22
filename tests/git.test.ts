@@ -1,11 +1,30 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { fitHunks, fitText, hunksOf, joinChanges, parseLog, parseNameStatus, parseNumstat, parseWorktrees } from '../hooks/git'
+import { afterFromHunks, fitHunks, fitText, hunksOf, joinChanges, parseLog, parseNameStatus, parseNumstat, parseStatus, parseWorktrees, statusOf } from '../hooks/git'
 
 const SHA_A = 'a'.repeat(40)
 const SHA_B = 'b'.repeat(40)
 
 describe('parsers', () => {
+  test('status: staged and unstaged letters, a rename with its old path after it, untracked files', async () => {
+    // As git 2.4x writes it for a staged rename, a file staged then edited, a deletion on disk and a new file.
+    const text = ' D gone.txt\0MM keep.txt\0R  new.txt\0old.txt\0?? dir/fresh.txt\0'
+    expect(parseStatus(text)).toEqual([
+      { xy: ' D', path: 'gone.txt', oldPath: null },
+      { xy: 'MM', path: 'keep.txt', oldPath: null },
+      { xy: 'R ', path: 'new.txt', oldPath: 'old.txt' },
+      { xy: '??', path: 'dir/fresh.txt', oldPath: null },
+    ])
+    expect(['MM', ' D', 'R ', '??', 'AM', ' T'].map(statusOf)).toEqual(['M', 'D', 'R', 'A', 'A', 'T'])
+  })
+
+  test('a whole-file diff gives back the file as it is now, without git\'s no-newline marker', async () => {
+    const hunks = '@@ -1,3 +1,3 @@\n const a = 1\n-const b = 2\n+const b = 3\n export { a, b }\n\\ No newline at end of file'
+    expect(afterFromHunks(hunks)).toBe('const a = 1\nconst b = 3\nexport { a, b }')
+    expect(afterFromHunks('@@ -0,0 +1,2 @@\n+line one\r\n+  indented')).toBe('line one\r\n  indented')
+    expect(afterFromHunks('@@ -1,2 +0,0 @@\n-gone\n-too')).toBe('')
+  })
+
   test('worktrees: branches, detached, locked; bare and prunable left out', async () => {
     const text = [
       `worktree /repo`, `HEAD ${SHA_A}`, `branch refs/heads/main`, ``,

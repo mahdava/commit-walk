@@ -9,8 +9,9 @@ then read the file as a diff, or as the whole file after or before the
 commit.
 
 It is built for watching an agent's work as it lands. The pane follows new
-commits while Claude edits, and it can step back through history without
-leaving the session.
+commits while Claude edits, shows what is not committed yet, staged and
+unstaged, one step after the newest commit, and it can step back through
+history without leaving the session.
 
 Everything comes from git and is only read. The plugin gives the model no
 tool, writes nothing to the repository and makes no network requests.

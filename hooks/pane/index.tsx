@@ -43,7 +43,8 @@ export function drawPane(f: Frame) {
     )
   }
 
-  if (snap.commits.length === 0) return nothingToWalk(f, snap.repoRoot)
+  // Uncommitted work is walked even where the range holds no commits (on the default branch, before the first commit).
+  if (snap.commits.length === 0 && snap.uncommitted.length === 0) return nothingToWalk(f, snap.repoRoot)
 
   // The debug section sits under the header here: below the diff it would be off screen.
   return (

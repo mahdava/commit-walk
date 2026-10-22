@@ -34,12 +34,24 @@ export type ChangedFile = {
   isBinary: boolean
   added: number
   deleted: number
+  /**
+   * Uncommitted files only: git's two-letter short status, staged then
+   * unstaged (`M `, ` M`, `MM`, `??` for untracked).
+   */
+  xy?: string
+  /** An untracked file whose lines were not counted: there were too many to count. */
+  isUncounted?: boolean
 }
+
+/** Which part of an uncommitted change a diff shows. */
+export type Stage = 'staged' | 'unstaged'
 
 /** What the code area shows. */
 export type Content =
   | { kind: 'diff'; source: string; isTruncated: boolean; context: 'full' | 'near' }
   | { kind: 'file'; source: string; isTruncated: boolean; path: string }
+  /** An uncommitted file's diff: its staged part, its unstaged part, or both. */
+  | { kind: 'parts'; parts: { stage: Stage; source: string; isTruncated: boolean; context: 'full' | 'near' }[] }
   | { kind: 'note'; text: string }
 
 /** Which commits the list starts from. */
@@ -60,6 +72,7 @@ export type Ranges = {
 /** Where the person is: chosen by identity, so a refresh keeps the place. */
 export type Selection = {
   worktree: string | null
+  /** A commit's SHA, or `uncommitted` for the uncommitted changes. */
   commit: string | null
   file: string | null
   mode: ViewMode
@@ -103,6 +116,10 @@ export type Snapshot = {
   /** The range the list shows: the preferred one, or all where the worktree does not offer it. */
   range: RangeMode
   files: ChangedFile[]
+  /** The selected worktree's staged, unstaged and untracked files. */
+  uncommitted: ChangedFile[]
+  /** The worktree's HEAD when loaded, or null before its first commit: a refresh reloads the commits when it moved. */
+  head: string | null
   content: Content | null
   isLoading: boolean
   error: string | null

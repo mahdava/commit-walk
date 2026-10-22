@@ -19,7 +19,7 @@ with this environment:
 
 | Setting | Why |
 | --- | --- |
-| `GIT_OPTIONAL_LOCKS=0` | Reading never takes git's index lock from an agent that is committing |
+| `GIT_OPTIONAL_LOCKS=0` | Reading never takes git's index lock from an agent that is committing, and `git status` leaves the index file as it is instead of refreshing it |
 | `GIT_PAGER=cat`, `--no-pager` | Output comes back whole, never through a pager |
 | `LC_ALL=C` | Messages are in English, so the plugin can recognise them |
 | `core.quotepath=off` | Paths with non-ASCII characters come back as they are |
@@ -28,6 +28,8 @@ Output is read NUL-separated (`-z`) wherever git offers it, so paths with
 spaces, quotes or line breaks come through as they are. Diffs run with
 `--no-ext-diff` and `--no-color`, so no external diff tool or colour setting
 of yours is used. A command that takes longer than 20 seconds is stopped.
+`diff --no-index` exits with 1 when the two sides differ, which is read as
+success.
 
 ## <picture><img src="../assets/sunflower-emoji.svg" alt="" width="24" height="24" align="top"></picture> Every command
 
@@ -43,8 +45,14 @@ of yours is used. A command that takes longer than 20 seconds is stopped.
 | `log -z --max-count=100 --format=… HEAD` or `<ref>..HEAD` | The commit list, for the chosen range |
 | `diff-tree -r -M -z --no-ext-diff --name-status` and `--numstat` | A commit's changed files and their line counts |
 | `diff-tree -p -M --no-color --no-ext-diff --unified=…` | The diff of one file |
-| `cat-file -s` and `cat-file blob` | A file's size, then the file after or before the commit |
-| `hash-object -t tree /dev/null` | The empty tree, which a root commit is compared with |
+| `cat-file -s` and `cat-file blob` | A file's size, then the file after or before the commit, or with `:<path>` its staged copy |
+| `hash-object -t tree /dev/null` | The empty tree, which a root commit, and uncommitted changes before the first commit, are compared with |
+| `rev-parse --verify --quiet HEAD` | The worktree's newest commit: what uncommitted changes are compared with, and whether a refresh after an edit needs the commits again |
+| `status --porcelain=v1 -z --untracked-files=all` | The uncommitted files with their two-letter status, leaving out what `.gitignore` skips |
+| `diff -M -z --numstat --no-ext-diff <HEAD>` | Their line counts |
+| `diff --cached -M --no-color --no-ext-diff --unified=…` | The staged part of one file's changes |
+| `diff --no-color --no-ext-diff --unified=…` | The unstaged part, and with the whole file as context, the file as it is on disk for After |
+| `diff --no-index … -- /dev/null <file>` | An untracked file: its line counts (`--numstat`), its diff, and its text for After |
 
 None of them changes the repository: nothing is committed, checked out,
 fetched, merged, stashed or written.

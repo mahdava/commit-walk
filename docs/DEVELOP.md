@@ -33,7 +33,7 @@ Two rules of that environment shape how the code is split:
 | `hooks/welcome.ts` | The welcome art, with a colour mask per row |
 | `types/index.d.ts` | The state contract: the values kept in the session's plugin state |
 | `tests/support.ts` | The tests' fake repository, fake git and engine, and helpers that read the drawing |
-| `tests/walk.test.tsx`, `lists.test.tsx`, `ranges.test.tsx`, `welcome.test.tsx`, `debug.test.tsx`, `control.test.tsx` | Pane tests by feature, on the terminal, desktop and mobile surfaces |
+| `tests/walk.test.tsx`, `lists.test.tsx`, `ranges.test.tsx`, `welcome.test.tsx`, `debug.test.tsx`, `control.test.tsx`, `uncommitted.test.tsx` | Pane tests by feature, on the terminal, desktop and mobile surfaces |
 | `tests/git.test.ts` | Parser and fitting tests |
 | `tests/window.test.ts` | List window tests |
 | `LICENSE` | The MIT License, for the code and documentation |

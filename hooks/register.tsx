@@ -25,7 +25,7 @@ import { createRepo, type GitRun, type Repo } from './git'
 import { drawFailure, drawPane } from './pane'
 import { frameOf, type Actions, type PaneValues } from './pane/frame'
 import {
-  EMPTY_SNAPSHOT, GIT_TIMEOUT_MS, INITIAL_SELECTION, PANE, PANE_COLUMNS, REFRESH_DELAY_MS, TITLE, TRACE_LENGTH, WRITING_TOOLS,
+  EMPTY_SNAPSHOT, GIT_TIMEOUT_MS, INITIAL_SELECTION, PANE, PANE_COLUMNS, REFRESH_DELAY_MS, TITLE, TRACE_LENGTH, UNCOMMITTED, WRITING_TOOLS,
   type Depth,
 } from './state'
 import type { ListScroll } from './window'
@@ -43,6 +43,8 @@ let sessionCwd = ''
 /** Bumped by every load; a load whose ticket is no longer current writes nothing. */
 let generation = 0
 let refreshTimer: { cancel(): void } | null = null
+/** How deep the pending refresh reads, while one is pending. */
+let refreshDepth: 'repo' | 'changes' | null = null
 
 // ── The hooks ────────────────────────────────────────────────────────────
 
@@ -98,13 +100,13 @@ export const register: Register = on => {
 
   on('tool.call', { tool: WRITING_TOOLS }, async ($, e, next) => {
     const result = await next(e)
-    if (!result.deny && result.isError !== true && result.isReadOnly !== true) scheduleRefresh($)
+    if (!result.deny && result.isError !== true && result.isReadOnly !== true) scheduleRefresh($, 'changes')
     return result
   })
 
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
-    scheduleRefresh($)
+    scheduleRefresh($, 'repo')
     return result
   })
 
@@ -218,6 +220,12 @@ async function contentFor(repo: Repo, cwd: string, commit: Commit, file: Changed
   return repo.diff(cwd, commit, file)
 }
 
+async function uncommittedContentFor(repo: Repo, cwd: string, file: ChangedFile, mode: ViewMode, head: string | null): Promise<Content> {
+  if (mode === 'after') return repo.uncommittedAfter(cwd, file)
+  if (mode === 'before') return repo.uncommittedBefore(cwd, file, head)
+  return repo.uncommittedDiff(cwd, file)
+}
+
 function chooseWorktree(worktrees: Worktree[], wanted: string | null, root: string): Worktree | undefined {
   return worktrees.find(wt => wt.path === wanted) ?? worktrees.find(wt => wt.path === root) ?? worktrees[0]
 }
@@ -230,11 +238,18 @@ async function load($: EngineInterface, depth: Depth, change: Partial<Selection>
   await update($, snapshot, snap => ({ ...snap, isLoading: true }))
 
   // Kept outside the try: a failure part way keeps what did load and says what failed.
-  let { repoRoot, worktrees, commits, ranges, files } = before
+  let { repoRoot, worktrees, commits, ranges, files, uncommitted, head } = before
   try {
     const repo = repoFor($)
 
-    if (depth === 'repo' || repoRoot === null) {
+    // A refresh after an edit reads the commits again only when HEAD moved.
+    let level = depth
+    if (level === 'changes') {
+      const shown = repoRoot === null ? undefined : chooseWorktree(worktrees, want.worktree, repoRoot)
+      if (!shown || (await repo.head(shown.path)) !== before.head) level = 'repo'
+    }
+
+    if (level === 'repo' || repoRoot === null) {
       repoRoot = await repo.toplevel(sessionCwd || '.')
       worktrees = await repo.worktrees(repoRoot)
     }
@@ -243,35 +258,50 @@ async function load($: EngineInterface, depth: Depth, change: Partial<Selection>
     const isNewWorktree = worktree.path !== was.worktree
 
     const isNewRange = want.range !== was.range
-    if (depth === 'repo' || repoRoot !== before.repoRoot || isNewWorktree) {
+    const isRepo = level === 'repo' || repoRoot !== before.repoRoot || isNewWorktree
+    if (isRepo) {
       ranges = await repo.ranges(worktree.path)
     }
     // A range the worktree does not offer reads as its whole history.
     const range: RangeMode = rangeRef(ranges, want.range) === null ? 'all' : want.range
-    if (depth === 'repo' || repoRoot !== before.repoRoot || isNewWorktree || isNewRange) {
+    if (isRepo || isNewRange) {
       commits = await repo.log(worktree.path, rangeRef(ranges, range))
     }
-    // An explicit pick wins; otherwise keep the commit, or follow the newest.
-    const keepCommit = 'commit' in change ? want.commit : isNewWorktree || was.isFollowing ? null : was.commit
-    const commit = commits.find(one => one.sha === keepCommit) ?? commits[0]
+    if (isRepo || level === 'changes') {
+      head = await repo.head(worktree.path)
+      uncommitted = await repo.uncommitted(worktree.path)
+    }
 
-    if (commit && (depth !== 'content' || commit.sha !== was.commit || isNewWorktree)) {
+    // An explicit pick wins; otherwise keep the place, or follow the newest commit. The
+    // uncommitted changes are kept while there are any, and shown when there is no commit.
+    const keepCommit = 'commit' in change ? want.commit : isNewWorktree || was.isFollowing ? null : was.commit
+    const isUncommitted = uncommitted.length > 0 && (keepCommit === UNCOMMITTED || commits.length === 0)
+    const commit = isUncommitted ? undefined : (commits.find(one => one.sha === keepCommit) ?? commits[0])
+    const wasHere = isUncommitted ? was.commit === UNCOMMITTED : commit !== undefined && commit.sha === was.commit
+
+    if (isUncommitted) {
+      files = uncommitted
+    } else if (commit && (!wasHere || isNewWorktree || level === 'repo' || level === 'commit')) {
       files = await repo.changes(worktree.path, commit)
     } else if (!commit) {
       files = []
     }
-    const keepFile = 'file' in change ? want.file : commit?.sha === was.commit ? was.file : null
+    const keepFile = 'file' in change ? want.file : wasHere ? was.file : null
     const file = files.find(one => one.path === keepFile) ?? files[0]
 
+    // A refresh that left a commit's file and view as they were keeps what they show.
+    const isSameView = level === 'changes' && !isUncommitted && wasHere && file?.path === was.file && want.mode === was.mode
     let content: Content | null = null
-    if (commit && file) content = await contentFor(repo, worktree.path, commit, file, want.mode)
+    if (isSameView) content = before.content
+    else if (isUncommitted && file) content = await uncommittedContentFor(repo, worktree.path, file, want.mode, head)
+    else if (commit && file) content = await contentFor(repo, worktree.path, commit, file, want.mode)
     else if (commit) content = { kind: 'note', text: 'This commit changes no files (an empty or merge-only commit).' }
     else content = { kind: 'note', text: 'This worktree has no commits yet.' }
 
     if (ticket !== generation) return
     await update($, selection, () => ({
       worktree: worktree.path,
-      commit: commit?.sha ?? null,
+      commit: isUncommitted ? UNCOMMITTED : (commit?.sha ?? null),
       file: file?.path ?? null,
       mode: want.mode,
       isFollowing: commit !== undefined && commit.sha === commits[0]?.sha,
@@ -285,6 +315,8 @@ async function load($: EngineInterface, depth: Depth, change: Partial<Selection>
       ranges,
       range,
       files,
+      uncommitted,
+      head,
       content,
       isLoading: false,
       error: null,
@@ -292,7 +324,7 @@ async function load($: EngineInterface, depth: Depth, change: Partial<Selection>
     }))
   } catch (cause) {
     if (ticket !== generation) return
-    const reached = { repoRoot, worktrees, commits, ranges }
+    const reached = { repoRoot, worktrees, commits, ranges, uncommitted, head }
     await update($, snapshot, snap => ({ ...snap, ...reached, isLoading: false, error: messageOf(cause) }))
   }
 }
@@ -310,32 +342,43 @@ async function isPaneOpen($: EngineInterface): Promise<boolean> {
   return (await $.ui.panes()).some(pane => pane.id === PANE)
 }
 
-function scheduleRefresh($: EngineInterface) {
+/**
+ * A refresh shortly after an edit (`changes`) or a turn's end (`repo`, which
+ * also sees new worktrees and branches). Refreshes that come close together
+ * run once, as deep as the deepest of them.
+ */
+function scheduleRefresh($: EngineInterface, depth: 'repo' | 'changes') {
+  const deepest = refreshDepth === 'repo' ? 'repo' : depth
   cancelRefresh()
+  refreshDepth = deepest
   refreshTimer = $.clock.after(REFRESH_DELAY_MS, () => {
     refreshTimer = null
-    inBackground($, refreshIfOpen($))
+    refreshDepth = null
+    inBackground($, refreshIfOpen($, deepest))
   })
 }
 
 function cancelRefresh() {
   refreshTimer?.cancel()
   refreshTimer = null
+  refreshDepth = null
 }
 
-async function refreshIfOpen($: EngineInterface) {
-  if (await isPaneOpen($)) await load($, 'repo')
+async function refreshIfOpen($: EngineInterface, depth: 'repo' | 'changes') {
+  if (await isPaneOpen($)) await load($, depth)
 }
 
 // ── Stepping (handlers: they read the current values, never drawn ones) ──
 
+/** One step older (1) or newer (-1); the uncommitted changes, when there are any, come after the newest commit. */
 async function stepCommit($: EngineInterface, delta: 1 | -1) {
   const sel = await read($, selection)
-  const { commits } = await read($, snapshot)
-  const at = commits.findIndex(one => one.sha === sel.commit)
-  const target = commits[at + delta]
-  if (at < 0 || !target) return
-  await load($, 'commit', { commit: target.sha, file: null })
+  const { commits, uncommitted } = await read($, snapshot)
+  const order = [...(uncommitted.length > 0 ? [UNCOMMITTED] : []), ...commits.map(one => one.sha)]
+  const at = order.indexOf(sel.commit ?? '')
+  const target = order[at + delta]
+  if (at < 0 || target === undefined) return
+  await load($, 'commit', { commit: target, file: null })
 }
 
 async function stepFile($: EngineInterface, delta: 1 | -1) {
