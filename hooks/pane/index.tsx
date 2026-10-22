@@ -66,8 +66,12 @@ export function drawFailure(ui: ElementTable, message: string) {
   return (
     <Box flexDirection="column" gap={1}>
       <Text bold>Commit walk could not draw this view</Text>
-      <Text color="red">{printable(message)}</Text>
-      <Text dimColor>Run /commit-walk refresh to try again, or press Esc to close the pane.</Text>
+      <Text>
+        Something went wrong inside commit-walk, not in your repository. Run /commit-walk refresh to try again, or
+        press Esc to close the pane.
+      </Text>
+      <Text dimColor>If it keeps happening, please report it with the detail below: github.com/mahdava/commit-walk/issues</Text>
+      <Text color="red">{`Detail: ${printable(message)}`}</Text>
     </Box>
   )
 }

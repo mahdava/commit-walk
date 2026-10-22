@@ -74,9 +74,9 @@ test('a drawing that throws says what failed instead of leaving the pane blank',
   engine(on, scenario())
   let isBroken = false
   // A snapshot the pane cannot draw from: none at all.
-  on('state.get', async (_$: unknown, e: { key: string }, next: (e: unknown) => Promise<{ value: unknown }>) => {
+  on('state.get', async (_$, e, next) => {
     const read = await next(e)
-    return isBroken && e.key === 'snapshot' ? { ...read, value: null } : read
+    return isBroken && e.key === 'snapshot' ? ({ value: null } as never) : read
   })
   const { ui } = await openPane($, 'terminal')
   expect(await current(ui, 'commit')).toMatch(/Change b/)
@@ -85,6 +85,27 @@ test('a drawing that throws says what failed instead of leaving the pane blank',
   await ui.press({ key: 'debug' })
   expect(await ui.find({ type: 'Text', text: /Commit walk could not draw this view/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /\/commit-walk refresh to try again/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Detail: null is not an object/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test("a button whose work fails shows why in the pane's error line", async ($, on) => {
+  engine(on, scenario())
+  // The next read of the selection comes back malformed, so stepping fails part way.
+  let failNextRead = false
+  on('state.get', async (_$, e, next) => {
+    if (failNextRead && e.key === 'selection') {
+      failNextRead = false
+      return { value: null } as never
+    }
+    return next(e)
+  })
+  const { ui } = await openPane($, 'terminal')
+
+  failNextRead = true
+  await ui.press({ key: 'older' })
+  expect(await ui.find({ type: 'Text', text: /null is not an object/ })).toBeDefined()
+  expect(await current(ui, 'commit')).toMatch(/ccccccc/)
   await ui.unmount()
 })
 

@@ -71,6 +71,22 @@ as with `--plugin-dir` below. That folder is git-ignored. Once it exists:
 npx -p typescript tsc -p .
 ```
 
+Don't run that before the folder exists. The mod's `tsconfig.json` extends
+`.claude-plugin/types/tsconfig.json`, which is what turns off output, so
+without it `tsc` reports errors for every API call and writes a `.js` copy
+next to every source file.
+
+A headless session (`claude -p`) does not write the folder. The types are
+also in the plugin-authoring skill: when the skill loads, it writes this
+build's API as `types/claude-code.d.ts` in its own folder and names the path.
+Its header holds a `tsconfig.json` for checking a mod from outside. Save it
+outside this folder, with `include` naming that file and this mod's `hooks`,
+`types` and `tests` folders, then:
+
+```
+npx -p typescript tsc -p <folder of that tsconfig.json>
+```
+
 To work on a local copy, start a session with the folder loaded:
 
 ```

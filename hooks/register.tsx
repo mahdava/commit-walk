@@ -50,7 +50,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     sessionCwd = e.cwd
     await update($, about, () => ({ pluginVersion: null, engineVersion: null, cwd: e.cwd }))
-    void aboutHere($, e.cwd).then(found => update($, about, () => found))
+    inBackground($, aboutHere($, e.cwd).then(found => update($, about, () => found)))
     // Named after the plugin. (/review is refused: it is an alias of the built-in /code-review.)
     try {
       await $.command.register({
@@ -136,13 +136,13 @@ async function paneValues($: EngineInterface): Promise<PaneValues> {
 
 function actionsFor($: EngineInterface): Actions {
   return {
-    load: (depth, change) => void load($, depth, change),
-    stepCommit: delta => void stepCommit($, delta),
-    stepFile: delta => void stepFile($, delta),
-    toggleDebug: () => void update($, debugOn, now => !now),
-    toggleList: which => void update($, expanded, now => (now === which ? null : which)),
-    foldLists: () => void update($, expanded, () => null),
-    scrollList: (prefix, at) => void update($, scroll, all => ({ ...all, [prefix]: at })),
+    load: (depth, change) => inBackground($, load($, depth, change)),
+    stepCommit: delta => inBackground($, stepCommit($, delta)),
+    stepFile: delta => inBackground($, stepFile($, delta)),
+    toggleDebug: () => inBackground($, update($, debugOn, now => !now)),
+    toggleList: which => inBackground($, update($, expanded, now => (now === which ? null : which))),
+    foldLists: () => inBackground($, update($, expanded, () => null)),
+    scrollList: (prefix, at) => inBackground($, update($, scroll, all => ({ ...all, [prefix]: at }))),
   }
 }
 
@@ -190,6 +190,24 @@ async function aboutHere($: EngineInterface, cwd: string): Promise<About> {
 
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause)
+}
+
+/**
+ * Starts `work` without waiting for it. A failure shows in the pane's error
+ * line instead of vanishing, or in the transcript when even that fails.
+ */
+function inBackground($: EngineInterface, work: Promise<unknown>) {
+  void work.catch(async cause => {
+    try {
+      await update($, snapshot, snap => ({ ...snap, isLoading: false, error: messageOf(cause) }))
+    } catch {
+      try {
+        $.ui.log(`commit-walk: ${messageOf(cause)}`)
+      } catch {
+        // Nowhere left to say it.
+      }
+    }
+  })
 }
 
 // ── Loading ──────────────────────────────────────────────────────────────
@@ -296,7 +314,7 @@ function scheduleRefresh($: EngineInterface) {
   cancelRefresh()
   refreshTimer = $.clock.after(REFRESH_DELAY_MS, () => {
     refreshTimer = null
-    void refreshIfOpen($)
+    inBackground($, refreshIfOpen($))
   })
 }
 
