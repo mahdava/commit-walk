@@ -12,11 +12,16 @@ export function header(f: Frame, repoRoot: string) {
   return (
     <Box flexDirection="column">
       <Box flexDirection="row" gap={1}>
-        <Text bold>
-          <Text color={TONE_COLOR.petal}>✿</Text> {clip(baseName(repoRoot), f.width - 16)}
-        </Text>
-        <Button key="refresh" hotkey="r" onPress={() => void f.act.load('repo')}>Refresh</Button>
-        {debugButton(f)}
+        {/* The name gives way to the buttons: in a narrow pane it is cut with … rather than wrapped mid-word. */}
+        <Box flexShrink={1} minWidth={0}>
+          <Text bold wrap="truncate-end">
+            <Text color={TONE_COLOR.petal}>✿</Text> {clip(baseName(repoRoot), f.width - 16)}
+          </Text>
+        </Box>
+        <Box flexShrink={0} flexDirection="row" gap={1}>
+          <Button key="refresh" hotkey="r" onPress={() => void f.act.load('repo')}>Refresh</Button>
+          {debugButton(f)}
+        </Box>
       </Box>
       <Text dimColor wrap="truncate-end">{snap.isLoading ? 'Loading…' : sel.isFollowing ? 'Following the newest commit' : 'Pinned to a past commit'}</Text>
       {snap.error ? <Text color="red">{snap.error}</Text> : null}
