@@ -44,10 +44,10 @@ Two rules of that environment shape how the code is split:
 | `assets/commit-walk-logo.svg` | The logo |
 | `assets/commit-walk-logo-outlined.svg` | The logo with a white outline, for dark backgrounds; the README shows it |
 | `assets/commit-walk-demo.gif`, `.mp4` | The demo at the top of the README |
-| `assets/screenshots/` | The guide's screenshot |
+| `assets/screenshots/` | The guide's screenshots: a commit's diff, and the uncommitted changes |
 | `assets/sunflower-emoji.svg` | Noto Emoji's 🌻 (Apache 2.0), before each README heading with an empty alt so screen readers skip it |
 | `assets/keyboard.svg` | The keys the pane uses, on a keyboard; the README shows it |
-| `tools/screenshots/` | `make-media.sh` remakes the demo and screenshot from a real session in a throwaway repository; its header lists what it needs |
+| `tools/screenshots/` | `make-media.sh` remakes the demo and screenshots from a real session in a throwaway repository; its header lists what it needs |
 | `tools/art/keys.mjs` | What each key does and its colour, shared by the keyboard image and the demo's keycaps |
 | `tools/art/keyboard.mjs` | Draws `assets/keyboard.svg`: `node tools/art/keyboard.mjs > assets/keyboard.svg` |
 | `docs/` | The guide, install, git commands, troubleshooting and this page, linked from the README |

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Builds the throwaway trail-notes repo used for the Commit Walk screenshots.
+# Builds the throwaway trail-notes repo used for the Commit Walk screenshots:
+# a feature branch of five commits, and three files not committed yet.
 set -euo pipefail
 D=$1
 # It starts over: only an earlier trail-notes demo, or nothing, is removed.
@@ -84,3 +85,21 @@ c "5 hours ago" "Test the difficulty grades"
 printf '\nEvery trail records its length and climb, and gets a difficulty grade:\neasy, moderate or hard.\n' >> README.md
 sed -i 's/if (effort < 15)/if (effort < 14)/' src/difficulty.ts
 c "40 minutes ago" "Explain the grades in the README and tighten the moderate band to under 14 effort points"
+
+# Work not committed yet, for the uncommitted stop: README.md staged and then
+# edited again (short, so both its parts fit on one screen), src/difficulty.ts
+# staged, src/gear.ts untracked.
+printf 'Each grade comes with a packing list.\n' >> README.md
+sed -i "s/^export type Difficulty = .*/export const GRADES = ['easy', 'moderate', 'hard'] as const\nexport type Difficulty = (typeof GRADES)[number]/" src/difficulty.ts
+git add README.md src/difficulty.ts
+sed -i 's/^Each grade comes with a packing list.$/Each grade comes with a packing list: see src\/gear.ts./' README.md
+cat > src/gear.ts <<'GEAR'
+import type { Difficulty } from './difficulty'
+
+/** What to pack for each grade. */
+export const GEAR: Record<Difficulty, string[]> = {
+  easy: ['water', 'snack'],
+  moderate: ['water', 'snack', 'rain jacket'],
+  hard: ['water', 'lunch', 'rain jacket', 'map'],
+}
+GEAR

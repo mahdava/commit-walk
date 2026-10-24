@@ -16,7 +16,7 @@ history without leaving the session.
 Everything comes from git and is only read. The plugin gives the model no
 tool, writes nothing to the repository and makes no network requests.
 
-<p align="center"><img src="assets/commit-walk-demo.gif" alt="Commit Walk in a Claude Code session: the pane opens on a feature branch, steps through files and older commits, switches between file diff, after and before, then a yellow pointer unfolds the commit list, picks a commit and switches the range to all commits, and h switches it back; each pressed key shows as a keycap in the keyboard picture's colours" width="900"></p>
+<p align="center"><img src="assets/commit-walk-demo.gif" alt="Commit Walk in a Claude Code session: the pane opens on a feature branch, steps through files and older commits, switches between file diff, after and before, then a yellow pointer unfolds the commit list, picks a commit and switches the range to all commits, and h switches it back; last, it picks the uncommitted changes from the top of the commit list, scrolls through a file's staged and unstaged parts and steps through the files not committed yet; each pressed key shows as a keycap in the keyboard picture's colours" width="900"></p>
 
 <p align="center"><sub>A walk through a demo branch, recorded in a real session. The yellow pointer shows what is clicked, and the keycaps what is pressed, in the colours of the keyboard below (<a href="assets/commit-walk-demo.mp4">MP4</a>).</sub></p>
 

@@ -120,6 +120,8 @@ It holds every staged, unstaged and untracked file, leaving out what
 `.gitignore` skips. With no uncommitted changes, there is no such row and
 Newer stays dimmed on the newest commit.
 
+<p align="center"><img src="../assets/screenshots/uncommitted.png" alt="The pane on the uncommitted changes of a feature branch: the commit row reads 'Uncommitted changes · 3 files', the files are README.md marked MM, src/difficulty.ts marked M and src/gear.ts marked ??, and README.md's diff in two parts, under the labels Staged changes and Unstaged changes" width="820"></p>
+
 Each file shows git's two-letter status, as `git status --short` writes it:
 the first letter is the staged change, the second the unstaged one.
 
