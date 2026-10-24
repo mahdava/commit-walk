@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# make-media.sh: remakes the README's screenshots and demo from a real session.
+# make-media.sh: remakes the README's demo and the guide's screenshots from a real session.
 #
 # It builds the throwaway trail-notes repository, runs Claude Code in a tmux
 # server of its own, walks the branch with keys and clicks, and captures the
@@ -67,6 +67,12 @@ click() {
   "$HERE/click.sh" "$c" "$r"; sleep 1.2
   shot "$3" "{\"pointer\":[$c,$r],\"ring\":true}"
 }
+# scroll <Down|Up> <rows> <seconds>: scroll the pane, shown as the arrow key.
+scroll() {
+  for _ in $(seq 1 "$2"); do $T send-keys -t s "$1"; sleep 0.1; done; sleep 1
+  local arrow=↓; [ "$1" = Up ] && arrow=↑
+  shot "$3" "{\"key\":\"$arrow\"}"
+}
 # Where text first shows on screen, as "col row".
 at() { $T capture-pane -pt s | awk -v s="$1" 'i=index($0,s){print i" "NR; exit}'; }
 
@@ -88,7 +94,15 @@ click "Record the climb" 0 2.4
 click "[ all ]" 2 2.2
 key h 2.2
 click "Commit    " 20 3.0
-
+# The uncommitted stop, the list's first row: README.md staged and then
+# edited again, scrolled so both its parts show (the second still), then a
+# staged file and its After, and an untracked file.
+click "Uncommitted changes" 0 2.0
+scroll Down 10 3.4; UNCOMMITTED_STILL=$(printf %02d $n)
+scroll Up 10 1.0
+key j 2.2
+key a 2.4
+key j 2.4
 $T kill-server
 
 cd "$OUT/frames"
@@ -98,6 +112,7 @@ for f in *.ansi; do args+=("$f" "${f%.ansi}.png"); done
 # corners take the window's own colour. The stills keep transparent corners.
 BACKDROP='#16181b' node "$HERE/render.mjs" "${args[@]}"
 cp "$STILL.ansi" still.ansi && node "$HERE/render.mjs" still.ansi diff.png
+cp "$UNCOMMITTED_STILL.ansi" still-uncommitted.ansi && node "$HERE/render.mjs" still-uncommitted.ansi uncommitted.png
 
 : > list.txt
 i=0
@@ -111,5 +126,5 @@ ffmpeg -loglevel error -y -f concat -safe 0 -i list.txt \
   "$ASSETS/commit-walk-demo.gif"
 
 mkdir -p "$ASSETS/screenshots"
-cp diff.png "$ASSETS/screenshots/"
+cp diff.png uncommitted.png "$ASSETS/screenshots/"
 echo "Media written to $ASSETS; captures kept in $OUT. The demo repository is $DEMO."
