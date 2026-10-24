@@ -122,3 +122,17 @@ test('an edit by Claude refreshes the open pane; a read-only command does not', 
   expect(await current(ui, 'commit')).toMatch(/eeeeeee/)
   await ui.unmount()
 })
+
+test("in a narrow pane the repository's name is cut with … instead of wrapping under the buttons", async ($, on) => {
+  engine(on, scenario())
+  const { ui } = await openPane($, 'terminal')
+  type Node = { type: string; props?: Record<string, unknown>; children?: unknown[] }
+  const boxes = (node: Node): Node[] => [node, ...(node.children ?? []).flatMap(child => (typeof child === 'object' && child ? boxes(child as Node) : []))]
+  const row = boxes((await ui.drawn()) as Node).find(node => node.type === 'Box' && node.props?.flexDirection === 'row' && JSON.stringify(node).includes('"refresh"'))
+  const [name, buttons] = (row?.children ?? []) as Node[]
+  expect(name?.props).toMatchObject({ flexShrink: 1, minWidth: 0 })
+  expect((name?.children?.[0] as Node)?.props).toMatchObject({ wrap: 'truncate-end' })
+  expect(buttons?.props).toMatchObject({ flexShrink: 0 })
+  expect(JSON.stringify(buttons)).toContain('"debug"')
+  await ui.unmount()
+})
