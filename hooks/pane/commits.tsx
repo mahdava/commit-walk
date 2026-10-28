@@ -1,5 +1,6 @@
 // The worktree and the commit: each a foldable list, the commit with its
-// author, date and position (counted from the oldest), and Older and Newer. The uncommitted changes
+// author, date and position (counted from the oldest), Older and Newer,
+// and a jump to the first commit not in the default branch. The uncommitted changes
 // are the list's first row and the step after the newest commit.
 
 import type { Commit } from '../../types'
@@ -43,6 +44,8 @@ export function commitSection(f: Frame) {
   // From the newest commit, Newer steps to the uncommitted changes, and says so.
   const isNewest = at === 0
   const newerLabel = isNewest && pending > 0 ? 'Uncommitted' : 'Newer'
+  const oldestNew = snap.ranges.notInDefault?.oldest ?? null
+  const defaultName = snap.ranges.notInDefault?.ref.replace(/^origin\//, '') ?? ''
   return (
     <Box flexDirection="column">
       {rangeRow(f)}
@@ -69,9 +72,12 @@ export function commitSection(f: Frame) {
           {` · ${snap.commits.length - at} of ${snap.commits.length}`}
         </Text>
       ) : null}
-      <Box flexDirection="row" gap={1}>
+      <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
         <Button key="older" hotkey="o" dimColor={isUncommitted ? snap.commits.length === 0 : at >= snap.commits.length - 1} onPress={() => void f.act.stepCommit(1)}>Older</Button>
         <Button key="newer" hotkey="n" dimColor={isUncommitted || (isNewest && pending === 0) || at < 0} onPress={() => void f.act.stepCommit(-1)}>{newerLabel}</Button>
+        {oldestNew ? (
+          <Button key="first-new" hotkey="f" dimColor={sel.commit === oldestNew} onPress={() => void f.act.firstNew()}>{`First not in ${defaultName}`}</Button>
+        ) : null}
       </Box>
     </Box>
   )

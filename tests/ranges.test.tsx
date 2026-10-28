@@ -133,3 +133,43 @@ test('the range preference: not in default by default, all where not offered, a 
   expect(await ui.find({ type: 'Text', text: /5 of 5$/ })).toBeDefined()
   await ui.unmount()
 })
+
+test('f jumps to the first commit not in the default branch, in the range shown when it has it', async ($, on) => {
+  const world = scenario()
+  const hex = (n: number) => n.toString(16).padStart(40, '0')
+  world.logs['/repo-side'] = Array.from({ length: 5 }, (_, i) => ({
+    sha: hex(500 - i), parents: [hex(499 - i)], subject: `Side ${5 - i}`,
+    files: [{ status: 'M', path: 'side.ts', added: 1, deleted: 0 }],
+  }))
+  world.originHead = 'origin/main'
+  world.ahead = { '/repo-side': { 'origin/main': 3, 'feat-base': 2 } }
+  world.distances = { '/repo-side': 'main\t4 3\nside\t0 0\nfeat-base\t1 2\n' }
+  engine(on, world)
+  const { ui } = await openPane($, 'terminal')
+  // On main nothing is ahead of it: no button.
+  expect(await ui.find({ key: 'first-new' })).toBeUndefined()
+
+  await pickFrom(ui, 'worktree', '/repo-side')
+  const button = await ui.find({ key: 'first-new' })
+  expect(button?.text).toBe('First not in main')
+  expect(button?.props.hotkey).toBe('f')
+  await ui.press({ key: 'first-new' })
+  expect(await current(ui, 'commit')).toMatch(/Side 3/)
+  expect(await ui.find({ type: 'Text', text: /1 of 3$/ })).toBeDefined()
+  expect((await ui.find({ key: 'first-new' }))?.props.dimColor).toBe(true)
+
+  // All commits has it: the range stays.
+  await ui.press({ key: 'range-all' })
+  await ui.press({ key: 'newer' })
+  await ui.press({ key: 'first-new' })
+  expect((await ui.find({ key: 'range-all' }))?.props.variant).toBe('primary')
+  expect(await current(ui, 'commit')).toMatch(/Side 3/)
+  expect(await ui.find({ type: 'Text', text: /3 of 5$/ })).toBeDefined()
+
+  // "since feat-base" does not: it switches to "not in main".
+  await ui.press({ key: 'range-base' })
+  await ui.press({ key: 'first-new' })
+  expect((await ui.find({ key: 'range-notInDefault' }))?.props.variant).toBe('primary')
+  expect(await current(ui, 'commit')).toMatch(/Side 3/)
+  await ui.unmount()
+})

@@ -140,6 +140,7 @@ function actionsFor($: EngineInterface): Actions {
   return {
     load: (depth, change) => inBackground($, load($, depth, change)),
     stepCommit: delta => inBackground($, stepCommit($, delta)),
+    firstNew: () => inBackground($, firstNew($)),
     stepFile: delta => inBackground($, stepFile($, delta)),
     toggleDebug: () => inBackground($, update($, debugOn, now => !now)),
     toggleList: which => inBackground($, update($, expanded, now => (now === which ? null : which))),
@@ -379,6 +380,15 @@ async function stepCommit($: EngineInterface, delta: 1 | -1) {
   const target = order[at + delta]
   if (at < 0 || target === undefined) return
   await load($, 'commit', { commit: target, file: null })
+}
+
+/** To the first commit not in the default branch: in the range shown when it has it, else in "not in default". */
+async function firstNew($: EngineInterface) {
+  const { commits, ranges } = await read($, snapshot)
+  const oldest = ranges.notInDefault?.oldest
+  if (!oldest) return
+  const isListed = commits.some(one => one.sha === oldest)
+  await load($, 'commit', { commit: oldest, file: null, ...(isListed ? {} : { range: 'notInDefault' as const }) })
 }
 
 async function stepFile($: EngineInterface, delta: 1 | -1) {

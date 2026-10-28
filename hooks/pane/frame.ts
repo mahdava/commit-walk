@@ -27,6 +27,8 @@ export type PaneValues = {
 export type Actions = {
   load: (depth: Depth, change?: Partial<Selection>) => void
   stepCommit: (delta: 1 | -1) => void
+  /** To the first commit not in the default branch. */
+  firstNew: () => void
   stepFile: (delta: 1 | -1) => void
   toggleDebug: () => void
   toggleList: (which: Expandable) => void
