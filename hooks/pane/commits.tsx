@@ -1,5 +1,5 @@
 // The worktree and the commit: each a foldable list, the commit with its
-// author, date and position, and Older and Newer. The uncommitted changes
+// author, date and position (counted from the oldest), and Older and Newer. The uncommitted changes
 // are the list's first row and the step after the newest commit.
 
 import type { Commit } from '../../types'
@@ -65,7 +65,8 @@ export function commitSection(f: Frame) {
           {commit.author} · {commit.when}
           {commit.parents.length > 1 ? ' · merge, against its first parent' : ''}
           {commit.parents.length === 0 ? ' · root commit' : ''}
-          {` · ${at + 1} of ${snap.commits.length}`}
+          {/* Counted from the oldest: the newest is "6 of 6". */}
+          {` · ${snap.commits.length - at} of ${snap.commits.length}`}
         </Text>
       ) : null}
       <Box flexDirection="row" gap={1}>

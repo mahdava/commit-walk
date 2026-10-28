@@ -117,15 +117,19 @@ test('the range preference: not in default by default, all where not offered, a 
   // The feature worktree opens on "not in".
   await pickFrom(ui, 'worktree', '/repo-side')
   expect((await ui.find({ key: 'range-notInDefault' }))?.props.variant).toBe('primary')
+  // Counted from the oldest: the newest is 2 of 2, the one before it 1 of 2.
+  expect(await ui.find({ type: 'Text', text: /2 of 2$/ })).toBeDefined()
+  await ui.press({ key: 'older' })
   expect(await ui.find({ type: 'Text', text: /1 of 2$/ })).toBeDefined()
+  await ui.press({ key: 'newer' })
 
   // A pick becomes the preference and survives a trip through main, which now shows its history.
   await ui.press({ key: 'range-all' })
-  expect(await ui.find({ type: 'Text', text: /1 of 5$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /5 of 5$/ })).toBeDefined()
   await pickFrom(ui, 'worktree', '/repo')
-  expect(await ui.find({ type: 'Text', text: /1 of 3$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /3 of 3$/ })).toBeDefined()
   await pickFrom(ui, 'worktree', '/repo-side')
   expect((await ui.find({ key: 'range-all' }))?.props.variant).toBe('primary')
-  expect(await ui.find({ type: 'Text', text: /1 of 5$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /5 of 5$/ })).toBeDefined()
   await ui.unmount()
 })
