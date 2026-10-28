@@ -89,6 +89,8 @@ key j 2.6; STILL=$(printf %02d $n)
 key a 1.8
 key b 1.8
 key d 1.2
+# Back to where the branch starts: its first commit not in main.
+key f 2.4
 click "Commit    " 20 2.2
 click "Record the climb" 0 2.4
 click "[ all ]" 2 2.2
