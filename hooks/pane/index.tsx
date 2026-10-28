@@ -56,7 +56,7 @@ export function drawPane(f: Frame) {
       {fileSection(f)}
       {viewButtons(f)}
       {contentView(f)}
-      <Text dimColor wrap="truncate-end">keys: o/n commit · k/j file · d/a/b view · h range · r refresh · x debug · Esc close</Text>
+      <Text dimColor wrap="truncate-end">keys: o/n commit · f branch start · k/j file · d/a/b view · h range · r refresh · x debug · Esc close</Text>
     </Box>
   )
 }
