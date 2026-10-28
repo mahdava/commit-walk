@@ -57,7 +57,7 @@ keyboard back to it.
 Every row and button can also be clicked: a list unfolds when you click its
 row, and folds again when you pick an entry.
 
-<p align="center"><img src="assets/keyboard.svg" alt="The keys the pane uses, on a keyboard: o older commit, n newer commit, h commit range, j next file, k previous file, d file diff, a file after, b file before, r refresh, x debug, Esc close, Tab next control, Enter press, arrows scroll" width="760"></p>
+<p align="center"><img src="assets/keyboard.svg" alt="The keys the pane uses, on a keyboard: o older commit, n newer commit, h commit range, f branch start, j next file, k previous file, d file diff, a file after, b file before, r refresh, x debug, Esc close, Tab next control, Enter press, arrows scroll" width="760"></p>
 
 <details>
 <summary>Keys as a table</summary>
@@ -66,6 +66,7 @@ row, and folds again when you pick an entry.
 | --- | --- |
 | `o` / `n` | Older commit / newer commit |
 | `h` | Commit range: all, not in main, since the base branch, in turn |
+| `f` | First commit not in main: where the branch starts |
 | `j` / `k` | Next file / previous file |
 | `d` / `a` / `b` | File diff / file after / file before |
 | `r` | Refresh |

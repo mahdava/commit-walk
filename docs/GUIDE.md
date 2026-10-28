@@ -64,7 +64,11 @@ From the top down:
 4. **Commit**, a framed row that unfolds the same way, listing the newest
    100 commits of the chosen range by short SHA and subject. Under it are
    the author, the relative date, whether it is a merge or the root commit,
-   and its position, then the Older and Newer buttons. While the worktree has
+   and its position, counted from the oldest (the newest of six is "6 of
+   6"). Then the Older and Newer buttons, and on a branch ahead of the
+   default branch, **First not in main** (`f`): it jumps to the branch's
+   first own commit, staying in the range shown when it has that commit
+   and switching to "not in main" when it does not. While the worktree has
    uncommitted changes, the list's first row is **✿ Uncommitted changes · 3
    files**, and on the newest commit Newer reads **Uncommitted**. See
    [Uncommitted changes](#-uncommitted-changes).

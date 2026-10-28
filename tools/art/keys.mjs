@@ -19,6 +19,7 @@ export const KEYS = {
   o: { group: 'commit', label: 'older\ncommit' },
   n: { group: 'commit', label: 'newer\ncommit' },
   h: { group: 'commit', label: 'commit\nrange' },
+  f: { group: 'commit', label: 'branch\nstart' },
   j: { group: 'file', label: 'next\nfile' },
   k: { group: 'file', label: 'prev\nfile' },
   d: { group: 'view', label: 'file\ndiff' },
