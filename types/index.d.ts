@@ -65,7 +65,8 @@ export type Ranges = {
   branch: string | null
   /** True when the worktree is on the default branch itself. */
   isOnDefault: boolean
-  notInDefault: Range | null
+  /** With `oldest`: the first of HEAD's commits the default branch lacks, null when there is none or it is past the listed 100. */
+  notInDefault: (Range & { oldest: string | null }) | null
   base: Range | null
 }
 

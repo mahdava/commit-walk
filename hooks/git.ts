@@ -357,10 +357,16 @@ export function createRepo(run: GitRunner) {
         return counted.exitCode === 0 ? Number(counted.stdout.trim()) : null
       }
       const defaultAhead = defaultRef ? await countSince(defaultRef) : null
+      // The oldest of them, where the commit list reaches it: rev-list lists newest first, like the log.
+      let oldest: string | null = null
+      if (defaultRef && defaultAhead !== null && defaultAhead > 0 && defaultAhead <= MAX_COMMITS) {
+        const listed = await run(cwd, ['rev-list', `--max-count=${MAX_COMMITS}`, `${defaultRef}..HEAD`])
+        if (listed.exitCode === 0) oldest = listed.stdout.trim().split('\n').pop() || null
+      }
       const defaultName = defaultRef?.replace(/^origin\//, '') ?? null
       // Offered wherever there is a default branch: on it, or on a branch level with it, the
       // range is empty, and the pane shows its welcome screen until a commit lands.
-      const notInDefault = defaultRef && defaultAhead !== null ? { ref: defaultRef, count: defaultAhead } : null
+      const notInDefault = defaultRef && defaultAhead !== null ? { ref: defaultRef, count: defaultAhead, oldest } : null
       const isOnDefault = defaultName !== null && branch === defaultName
 
       // One command for every branch's distance (git 2.41+); older git offers no base.

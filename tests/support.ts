@@ -36,7 +36,7 @@ export function scenario() {
     originHead: null as string | null,
     /** The refs that exist, for `rev-parse --verify`. */
     refs: [] as string[],
-    /** Per worktree, `rev-list --count <ref>..HEAD` per ref: HEAD's commits the ref lacks. */
+    /** Per worktree, per ref: how many of HEAD's commits the ref lacks (`rev-list [--count] <ref>..HEAD`). */
     ahead: {} as Record<string, Record<string, number>>,
     /** Per worktree, `for-each-ref … ahead-behind:HEAD` lines: `<branch>\t<theirs> <mine>`. */
     distances: {} as Record<string, string>,
@@ -67,7 +67,10 @@ export function fakeGit(world: World, cwd: string, args: readonly string[]) {
       return world.originHead ? ok(`${world.originHead}\n`) : { exitCode: 1, stdout: '', stderr: '' }
     case 'rev-list': {
       const ref = (args[args.length - 1] ?? '').replace(/\.\.HEAD$/, '')
-      return ok(`${world.ahead[cwd]?.[ref] ?? 0}\n`)
+      const ahead = world.ahead[cwd]?.[ref] ?? 0
+      if (args.includes('--count')) return ok(`${ahead}\n`)
+      // Without --count: the SHAs, newest first, as the log lists them.
+      return ok((world.logs[cwd] ?? []).slice(0, ahead).map(c => `${c.sha}\n`).join(''))
     }
     case 'for-each-ref':
       return ok(world.distances[cwd] ?? '')
